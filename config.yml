@@ -1,0 +1,17 @@
+server:
+  host: localhost
+  port: 8080
+mongo:
+  url: mongodb://localhost:27017
+  db: local
+  collection: mock
+  caFile:
+  certFile:
+  keyFile:
+log:
+  encoding: json
+  output:
+    - stdout
+    - /tmp/logs
+  erroutput:
+    - stderr
