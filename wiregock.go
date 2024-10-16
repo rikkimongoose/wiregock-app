@@ -29,22 +29,22 @@ const (
 
 type AppConfig struct {
     Server struct {
-        Host string `yaml:"host", env:"SERVER_HOST", env-default:"localhost", env-description:"server host"`
-        Port string `yaml:"port", env:"SERVER_PORT", env-default:"8080", env-description:"server port"`
-    } `yaml:"server"`
+        Host string `json:"host,omitempty", yaml:"host,omitempty", env:"SERVER_HOST", env-default:"localhost", env-description:"server host"`
+        Port string `json:"port,omitempty", yaml:"port,omitempty", env:"SERVER_PORT", env-default:"8080", env-description:"server port"`
+    } `json:"server,omitempty", yaml:"server,omitempty"`
     Mongo struct {
-        url string `yaml:"url", env:"MONGO_URL", env-default:"mongodb://localhost:27017", env-description:"MongoDB connection string"`
-        database string `yaml:"db", env:"MONGO_DB", env-default:"local", env-description:"MongoDB database"`
-        collection string `yaml:"collection", env:"MONGO_COLLECTION", env-default:"mock",  env-description:"MongoDB collection"`
-        caFile string `yaml:"caFile", env:"MONGO_CA", env-default:"", env-description:"path to CA certificate"`
-        certFile string `yaml:"certFile", env:"MONGO_CERT", env-default:"", env-description:"path to public client certificate"`
-        keyFile string `yaml:"keyFile", env:"MONGO_KEY", env-default:"", env-description:"path to private client key"`
-    } `yaml:"mongo"`
+        url string `json:"url,omitempty", yaml:"url,omitempty", env:"MONGO_URL", env-default:"mongodb://localhost:27017", env-description:"MongoDB connection string"`
+        database string `json:"db,omitempty", yaml:"db,omitempty", env:"MONGO_DB", env-default:"local", env-description:"MongoDB database"`
+        collection string `json:"collection,omitempty", yaml:"collection,omitempty", env:"MONGO_COLLECTION", env-default:"mock",  env-description:"MongoDB collection"`
+        caFile string `json:"caFile,omitempty", yaml:"caFile,omitempty", env:"MONGO_CA", env-default:"", env-description:"path to CA certificate"`
+        certFile string `json:"certFile,omitempty", yaml:"certFile,omitempty", env:"MONGO_CERT", env-default:"", env-description:"path to public client certificate"`
+        keyFile string `json:"keyFile,omitempty", yaml:"keyFile,omitempty", env:"MONGO_KEY", env-default:"", env-description:"path to private client key"`
+    } `json:"mongo,omitempty", yaml:"mongo,omitempty"`
     Log struct {
-        Encoding string `yaml:"encoding", env-default:"json", env:"LOG_ENCODING", env-description:"storage format for logs"`
-        OutputPaths []string `yaml:"output", env-default:"stdout,/tmp/logs", env:"LOG_OUTPUTPATH", env-description:"output pipelines for logs"`
-        ErrorOutputPaths []string `yaml:"erroutput", env-default:"stderr", env:"LOG_OUTPUTERRORPATH", env-description:"error pipelines for logs"`
-    } `yaml:"log"`
+        Encoding string `json:"encoding,omitempty", yaml:"encoding,omitempty", env-default:"json", env:"LOG_ENCODING", env-description:"storage format for logs"`
+        OutputPaths []string `json:"output,omitempty", yaml:"output,omitempty", env-default:"stdout,/tmp/logs", env:"LOG_OUTPUTPATH", env-description:"output pipelines for logs"`
+        ErrorOutputPaths []string `json:"erroutput,omitempty", yaml:"erroutput,omitempty", env-default:"stderr", env:"LOG_OUTPUTERRORPATH", env-description:"error pipelines for logs"`
+    } `json:"log,omitempty", yaml:"log,omitempty"`
 }
 
 type MongoTlsConfigInput struct {
@@ -180,18 +180,15 @@ func installWiremock(server *fiber.App, mock *wiremock.MockData) {
     if mock.Request == nil {
         return
     }
-
     request := mock.Request
-    if mock.Request.Method == nil {
+    if request.Method == nil {
         return
     }
-
     methodNames := loadMethods(*request.Method)
     if request.BasicAuthCredentials != nil && request.BasicAuthCredentials.Username != nil && request.BasicAuthCredentials.Password != nil {
         server.Use(basicauth.New(basicauth.Config{
             Users: map[string]string{
-                "usernameAuth": *request.BasicAuthCredentials.Username,
-                "passwordAuth": *request.BasicAuthCredentials.Password
+                *request.BasicAuthCredentials.Username: *request.BasicAuthCredentials.Password
                 },
             }))
     }
@@ -231,8 +228,6 @@ func installWiremock(server *fiber.App, mock *wiremock.MockData) {
         } else {
             c.Set("traceparent", traceId)
         }
-        
-
 
         if mock.Response == nil {
             return c.Status(fiber.StatusOK).SendString("")
@@ -266,7 +261,6 @@ func installWiremock(server *fiber.App, mock *wiremock.MockData) {
         
     })
 }
-
 
 func mongoTlsConfig(input *MongoTlsConfigInput) *tls.Config {
     caCertPool := x509.NewCertPool()
