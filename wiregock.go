@@ -6,21 +6,16 @@ import (
     "github.com/ilyakaznacheev/cleanenv"
     "go.uber.org/zap"
     "go.uber.org/zap/zapcore"
-    //"github.com/gofiber/fiber/v3"
-    //"github.com/gofiber/fiber/v3/middleware/adaptor"
-    "github.com/gofiber/fiber/v2"
-    "github.com/gofiber/fiber/v2/middleware/healthcheck"
-    //"github.com/gofiber/fiber/v2/middleware/adaptor"
-    //"context"
-    //"crypto/tls"
-    //"crypto/x509"
-    "os"
+
     "context"
+    "crypto/tls"
+    "crypto/x509"
+    "os"
     "go.mongodb.org/mongo-driver/bson"
     "go.mongodb.org/mongo-driver/mongo"
     "go.mongodb.org/mongo-driver/mongo/options"
-    //actuator "github.com/sinhashubham95/go-actuator"
     "github.com/rikkimongoose/wiregock"
+    "strings"
 )
 
 const (
@@ -36,7 +31,7 @@ type AppConfig struct {
     Mongo struct {
         Url string `json:"url,omitempty" yaml:"url,omitempty" env:"MONGO_URL" env-default:"mongodb://localhost:27017" env-description:"MongoDB connection string"`
         Database string `json:"db,omitempty" yaml:"db,omitempty" env:"MONGO_DB" env-default:"local" env-description:"MongoDB database"`
-        Collection string `json:"collection,omitempty" yaml:"collection,omitempty" env:"MONGO_COLLECTION" env-default:"mock" env-description:"MongoDB collection"`
+        Collection []string `json:"collection,omitempty" yaml:"collection,omitempty" env:"MONGO_COLLECTION" env-default:"mock" env-description:"MongoDB collection"`
         CaFile string `json:"caFile,omitempty" yaml:"caFile,omitempty" env:"MONGO_CA" env-default:"" env-description:"path to CA certificate"`
         CertFile string `json:"certFile,omitempty" yaml:"certFile,omitempty" env:"MONGO_CERT", env-default:"" env-description:"path to public client certificate"`
         KeyFile string `json:"keyFile,omitempty" yaml:"keyFile,omitempty" env:"MONGO_KEY" env-default:"" env-description:"path to private client key"`
@@ -48,8 +43,12 @@ type AppConfig struct {
     } `json:"log,omitempty" yaml:"log,omitempty"`
 }
 
-type MongoTlsConfigInput struct {
-    caFile, certFile, keyFile string
+type MockRoutesData struct {
+    mockRoutes []MockRoute
+}
+
+type MockRoute struct {
+    mocks []wiregock.MockData
 }
 
 var log *zap.Logger
@@ -59,7 +58,6 @@ func main() {
 
     var err error
     cfgPath := *flag.String("CONFIG", "config.yml", "Path to application config file")
-    fmt.Printf(`cfgPath: %s\n\n`, cfgPath)
     err = cleanenv.ReadConfig(cfgPath, &config)
     if err != nil {
         panic(fmt.Sprintf("Unable to load config file %s. Error: %s", cfgPath, err))
@@ -81,88 +79,82 @@ func main() {
     log = zap.Must(zc.Build())
     
     defer log.Sync() // все асинхронные логи будут записаны перед выходом
-    server := fiber.New()
-    installAddons(server)
-    _ = loadFromMongo()
-    /*for mockData := range mockDataItems {
-        installWiremock(&server, &mockData)
-    }*/
-    serverPath := fmt.Sprintf("%s:%d", config.Server.Host, config.Server.Port)
-    log.Info("Establishing server at URL", zap.String("url", serverPath))
-    //server.Listen(serverPath)
+    mockRoutesData := loadMocksFromMongo(config.Mongo.Collection)
+    if mockRoutesData == nil {
+        log.Warn(`Mocks collection is empty`)
+    }
+    /*else {
+        for _, mockRoute := range mockRoutes {
+        for _, mock := mockRoute.mocks {
+            installMock(&server, &mock)
+        }
+    }
+}*/
 }
 
-func loadFromMongo() []wiregock.MockData {
+
+func loadMocksFromMongo(storages []string) *MockRoutesData {
     ctx := context.TODO()
+    tlsConfig := mongoTlsConfig(config.Mongo.CaFile, config.Mongo.CertFile, config.Mongo.KeyFile)
     opts := options.Client().ApplyURI(config.Mongo.Url)
-    /*            .SetTLSConfig(mongoTlsConfig(
-                        &MongoTlsConfigInput{
-                            caFile: config.Mongo.caFile,
-                            certFile: config.Mongo.certFile,
-                            keyFile: config.Mongo.keyFile
-                        }
-                    )
-                )*/
+    if tlsConfig != nil {
+        opts = opts.SetTLSConfig(tlsConfig)
+    }
+
     client, err := mongo.Connect(ctx, opts)
     if err != nil {
         log.Error(`Database connection error`, zap.Error(err), zap.String("db", config.Mongo.Url))
-        return []wiregock.MockData{}
+        return nil
     }
 
     var resultPing bson.M
     if err := client.Database(config.Mongo.Database).RunCommand(ctx, bson.D{{"ping", 1}}).Decode(&resultPing); err != nil {
         log.Error(`Database ping error`, zap.Error(err), zap.String("db", config.Mongo.Database))
-        return []wiregock.MockData{}
+        return nil
     }
-    log.Error("Pinged your deployment. You successfully connected to MongoDB!")
-    var mockData []wiregock.MockData
-    wiremockCollection := client.Database(config.Mongo.Database).Collection(config.Mongo.Collection)
-    cursor, err := wiremockCollection.Find(ctx, bson.M{})
+
+    log.Info("Pinged your deployment. You successfully connected to MongoDB!")
+
+    var mockRoutes []MockRoute
+
+    for _, storage := range storages {
+        mockRoute := loadMock(client, &ctx, storage)
+        if mockRoute != nil {
+            mockRoutes = append(mockRoutes, *mockRoute)
+        }
+    }
+    
+    return &MockRoutesData{mockRoutes}
+}
+
+func loadMock(client *mongo.Client, ctx *context.Context, mockSource string) *MockRoute {
+    var mocks []wiregock.MockData
+    wiremockCollection := client.Database(config.Mongo.Database).Collection(mockSource)
+    cursor, err := wiremockCollection.Find(*ctx, bson.M{})
     if err != nil {
         log.Error(`Database cursor creation error`,
             zap.Error(err),
             zap.String("db", config.Mongo.Url),
-            zap.String("collection", config.Mongo.Collection))
-        return []wiregock.MockData{}
+            zap.String("collection", mockSource))
+        return nil
     }
-    for cursor.Next(ctx) {
+    for cursor.Next(*ctx) {
         var mock wiregock.MockData
         if err = cursor.Decode(&mock); err != nil {
-            log.Error(`Unable to parse MockData`,
-            zap.Error(err))
+            log.Error(`Unable to parse MockData`, zap.Error(err))
             continue
         }
-        log.Info(`Rule loaded`)
-        mockData = append(mockData, mock)
+        if mock.Request.UrlPath != nil {
+            log.Info(`Rule loaded`, zap.String("url", *mock.Request.UrlPath))
+        } else if mock.Request.UrlPattern != nil {
+            log.Info(`Rule loaded`, zap.String("url regex", *mock.Request.UrlPattern))
+        } else {
+            log.Info(`Rule loaded, but no URL to attach`)
+        }
+        
+        mocks = append(mocks, mock)
     }
-    return mockData
-}
-
-func installAddons(server *fiber.App) {
-    /*actuatorConfig := &actuator.Config{
-        Endpoints: []int{
-            actuator.Env,
-            actuator.Info,
-            actuator.Metrics,
-            actuator.Ping,
-            actuator.Shutdown,
-            actuator.ThreadDump,
-        },
-        Name: productName,
-        Port: config.Server.Port,
-        Version: productVersion,
-    }
-    server.Get("/actuator", adaptor.HTTPHandlerFunc(actuator.GetActuatorHandler(actuatorConfig*/
-    server.Use(healthcheck.New(healthcheck.Config{
-        LivenessProbe: func(c *fiber.Ctx) bool {
-            return true
-        },
-        LivenessEndpoint: "/live",
-        ReadinessProbe: func(c *fiber.Ctx) bool {
-            return true
-        },
-        ReadinessEndpoint: "/ready",
-    }))
+    return &MockRoute{mocks}
 }
 
 /*func installWiremock(server *fiber.App, mock *wiremock.MockData) {
@@ -251,37 +243,35 @@ func installAddons(server *fiber.App) {
     })
 }*/
 
-/**func mongoTlsConfig(input *MongoTlsConfigInput) *tls.Config {
+func mongoTlsConfig(caFile string, certFile string, keyFile string) *tls.Config {
     caCertPool := x509.NewCertPool()
-    if strings.Compare(input.caFile, "") == 0 || strings.Compare(input.certFile, "") == 0 || strings.Compare(input.keyFile, "") == 0 {
-        return &tls.Config {
-            RootCAs: caCertPool,
-            ClientAuth: tls.NoClientCert,
-            ClientCAs: nil,
-            InsecureSkipVerify: true,
-            Certificates: []tls.Certificate{},
-        }
+    if strings.Compare(caFile, "") == 0 || strings.Compare(certFile, "") == 0 || strings.Compare(keyFile, "") == 0 {
+        return nil
     }
-    caFile := input.caFile
-    certFile := input.certFile
-    keyFile := input.keyFile
-
     // Loads CA certificate file
     caCert, err := os.ReadFile(caFile)
     if err != nil {
-        logger.Error(err)
+        log.Error(`Unable to load caCert`, zap.Error(err), zap.String("caFile", caFile))
+        return nil
     }
     if ok := caCertPool.AppendCertsFromPEM(caCert); !ok {
-        logger.Error("Error: CA file must be in PEM format")
+        log.Error("Error: CA file must be in PEM format")
+        return nil
     }
     // Loads client certificate files
     cert, err := tls.LoadX509KeyPair(certFile, keyFile)
     if err != nil {
-        logger.Error(err)
+        log.Error(`Unable to load client certificate files`,
+            zap.Error(err),
+            zap.String("certFile", certFile),
+            zap.String("keyFile", keyFile),
+        )
+        return nil
     }
     // Instantiates a Config instance
     return &tls.Config{
         RootCAs:      caCertPool,
         Certificates: []tls.Certificate{cert},
     }
-}**/
+}
+
