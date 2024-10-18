@@ -27,7 +27,7 @@ import (
 
 const (
     productName = "WireGock"
-    productVersion = "0.1.0"
+    productVersion = "0.8.2"
 )
 
 type AppConfig struct {
