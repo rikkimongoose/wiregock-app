@@ -14,15 +14,15 @@ import (
     "crypto/x509"
     "crypto/subtle"
     "crypto/sha256"
-    "github.com/ilyakaznacheev/cleanenv"
     "go.uber.org/zap"
     "go.uber.org/zap/zapcore"
     "go.mongodb.org/mongo-driver/bson"
     "go.mongodb.org/mongo-driver/mongo"
     "go.mongodb.org/mongo-driver/mongo/options"
     "github.com/gorilla/mux"
-    "github.com/rikkimongoose/wiregock"
+    "github.com/ilyakaznacheev/cleanenv"
     actuator "github.com/sinhashubham95/go-actuator"
+    "github.com/rikkimongoose/wiregock"
 )
 
 const (
