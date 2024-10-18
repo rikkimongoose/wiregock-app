@@ -1,5 +1,5 @@
 # wiregock
-Small and very fast and stable implementation of Wiremock with Goland and MongoDB based of fiber lib.
+Small and very fast and stable implementation of Wiremock with Goland and MongoDB based on Gorilla MUX lib.
 
 ## Configuration
 
@@ -31,6 +31,10 @@ Stub matching and verification queries can use the following request attributes:
 * Cookies
 * Request body
 * Traceparent
+
+Will be supported in following versions:
+
+* Multipart files
 
 ### HTTP methods
 
@@ -64,6 +68,9 @@ Stub matching and verification queries can use the following request attributes:
 * **contains** string contains the value
 * **matches** compare by RegExp
 * **wildcards** compare with wildcards (**\***, **?**)
+
+Will be supported in following versions:
+
 * **equalToJson** if the attribute (most likely the request body in practice) is valid JSON and is a semantic match for the expected value.
 * **equalToXml** if the attribute value is valid XML and is semantically equal to the expected XML document
 * **matchesXPath** XPath matcher described above can be combined with another matcher, such that the value returned from the XPath query is evaluated against it:
