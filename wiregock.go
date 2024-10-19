@@ -296,16 +296,10 @@ func generateHandler(mock *wiregock.MockData) http.HandlerFunc {
             w.Header().Set("traceparent", traceId)
         }
 
-        statusCode := http.StatusOK
         response := mock.Response
-        if response.Status != nil {
-            statusCode = *response.Status
-        }
-        w.WriteHeader(statusCode)
         if response == nil {
             return
         }
-
         if response.Headers != nil {
             for key, value := range response.Headers {
                 w.Header().Set(key, value)
@@ -327,6 +321,10 @@ func generateHandler(mock *wiregock.MockData) http.HandlerFunc {
             }
         }
 
+        statusCode := http.StatusOK
+        if response.Status != nil {
+            statusCode = *response.Status
+        }
         if statusCode != http.StatusOK {
             w.WriteHeader(statusCode)
         }
