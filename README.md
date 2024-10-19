@@ -81,6 +81,11 @@ Will be supported in following versions:
 
 ## Changelog
 
+### v0.8.6
+
+* add */mock* route
+* add */healthcheck* route
+
 ### v0.8.4
 
 * add *mockfiles* property and loading mocks from files

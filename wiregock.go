@@ -28,7 +28,7 @@ import (
 
 const (
     productName = "WireGock"
-    productVersion = "0.8.4"
+    productVersion = "0.8.6"
 )
 
 type AppConfig struct {
@@ -146,7 +146,7 @@ func main() {
             installMockRoutesData(mockRoutesDataFromMongo, router)
         }
     }
-    
+
     mocks := []wiregock.MockData{}
     if mockRoutesDataFromMongo != nil {
         for _, mockRoute := range mockRoutesDataFromMongo.mockRoutes {
