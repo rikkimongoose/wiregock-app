@@ -1,0 +1,48 @@
+[{
+    "request": {
+        "urlPath": "/everything",
+        "method": "ANY",
+        "headers": {
+            "Accept": {
+                "contains": "xml"
+            }
+        },
+        "queryParameters": {
+            "search_term": {
+                "equalTo": "WireMock"
+            }
+        },
+        "bodyPatterns": [
+            {
+                "equalToXml": "<search-results />"
+            },
+            {
+                "matchesXPath": {
+                    "expression": "//search-results",
+                    "contains": "wash",
+                    "equalToXml": "<todo-item>Do the washing</todo-item>",
+                    "xPathNamespaces" : {
+                        "stuff" : "http://stuff.example.com",
+                        "more"  : "http://more.example.com"
+                    },
+                    "and": [
+                        {
+                            "before": "2022-01-01T00:00:00"
+                        },
+                        {
+                            "after": "2020-01-01T00:00:00"
+                        }
+                    ]
+                }
+                
+            }
+        ],
+        "basicAuthCredentials": {
+            "username": "jeff@example.com",
+            "password": "jeffteenjefftyjeff"
+        }
+    },
+    "response": {
+        "status": 200
+    }
+}]

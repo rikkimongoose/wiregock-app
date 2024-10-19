@@ -10,6 +10,7 @@ import (
     "time"
     "net/http"
     "io/ioutil"
+    "encoding/json"
     "crypto/tls"
     "crypto/x509"
     "crypto/subtle"
@@ -35,19 +36,21 @@ type AppConfig struct {
         Host string `yaml:"host,omitempty" env:"SERVER_HOST" env-default:"localhost" env-description:"server host"`
         Port int `yaml:"port,omitempty" env:"SERVER_PORT" env-default:"8080" env-description:"server port"`
     } `json:"server,omitempty" yaml:"server,omitempty"`
-    Mongo struct {
+    Mongo *struct {
         Url string `json:"url,omitempty" yaml:"url,omitempty" env:"MONGO_URL" env-default:"mongodb://localhost:27017" env-description:"MongoDB connection string"`
         Database string `json:"db,omitempty" yaml:"db,omitempty" env:"MONGO_DB" env-default:"local" env-description:"MongoDB database"`
         Collection []string `json:"collection,omitempty" yaml:"collection,omitempty" env:"MONGO_COLLECTION" env-default:"mock" env-description:"MongoDB collection"`
         CaFile string `json:"caFile,omitempty" yaml:"caFile,omitempty" env:"MONGO_CA" env-default:"" env-description:"path to CA certificate"`
         CertFile string `json:"certFile,omitempty" yaml:"certFile,omitempty" env:"MONGO_CERT", env-default:"" env-description:"path to public client certificate"`
         KeyFile string `json:"keyFile,omitempty" yaml:"keyFile,omitempty" env:"MONGO_KEY" env-default:"" env-description:"path to private client key"`
-    } `json:"mongo" yaml:"mongo"`
+    } `json:"mongo,omitempty" yaml:"mongo,omitempty"`
     Log struct {
+        Level *string `json:"level,omitempty" yaml:"level,omitempty" env-default:"json", env:"LOG_LEVEL" env-description:"log output level: Debug, Info, Warn, Error, DPanic, Panic, Fatal"`
         Encoding string `json:"encoding,omitempty" yaml:"encoding,omitempty" env-default:"json", env:"LOG_ENCODING" env-description:"storage format for logs"`
         OutputPaths []string `json:"output,omitempty" yaml:"output,omitempty" env-default:"stdout,/tmp/logs" env:"LOG_OUTPUTPATH" env-description:"output pipelines for logs"`
         ErrorOutputPaths []string `json:"erroutput,omitempty" yaml:"erroutput,omitempty" env-default:"stderr" env:"LOG_OUTPUTERRORPATH" env-description:"error pipelines for logs"`
     } `json:"log,omitempty" yaml:"log,omitempty"`
+    MockFiles []string `json:"mockfiles,omitempty" yaml:"mockfiles,omitempty" env:"MOCKFILES_COLLECTION" env-default:"" env-description:"JSON source files"`
 }
 
 type MockRoutesData struct {
@@ -73,7 +76,7 @@ func main() {
     encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
 
     zc := zap.Config{
-        Level:       zap.NewAtomicLevelAt(zapcore.DebugLevel),
+        Level:       zap.NewAtomicLevelAt(parseLogLevel(config.Log.Level)),
         OutputPaths: config.Log.OutputPaths,
         ErrorOutputPaths: config.Log.ErrorOutputPaths,
         EncoderConfig: encoderCfg,
@@ -102,13 +105,62 @@ func main() {
     }
     actuatorHandler := actuator.GetActuatorHandler(actuatorConfig)
     router.PathPrefix("/actuator/").Handler(actuatorHandler)
-    mockRoutesData := loadMocksFromMongo(
+
+    if len(config.MockFiles) != 0 {
+        var mockRoutes []MockRoute
+        for _, file := range config.MockFiles {
+            jsonFile, err := os.Open(file)
+            if err != nil {
+                log.Error(`Error loading JSON from file`, zap.Error(err), zap.String("file", file))
+                continue
+            }
+            defer jsonFile.Close()
+            byteValue, _ := ioutil.ReadAll(jsonFile)
+            var mocks []wiregock.MockData
+            err = json.Unmarshal([]byte(byteValue), &mocks)
+            if err != nil {
+                log.Error(`Error parsing JSON from file`, zap.Error(err), zap.String("file", file))
+                continue
+            }
+            mockRoutes = append(mockRoutes, MockRoute{mocks})
+            for _, mock := range mocks {
+                log.Info(`Successfully load route from file`, zap.String("urlPath", *mock.Request.UrlPath), zap.String("file", file))
+            }
+        }
+        installMockRoutesData(&MockRoutesData{mockRoutes}, router)
+    }
+    if config.Mongo != nil {
+        mockRoutesDataFromMongo := loadMocksFromMongo(
         config.Mongo.Url,
         config.Mongo.Database,
         config.Mongo.Collection,
         config.Mongo.CaFile,
         config.Mongo.CertFile,
         config.Mongo.KeyFile)
+        if mockRoutesDataFromMongo != nil {
+            installMockRoutesData(mockRoutesDataFromMongo, router)
+        }
+    }
+
+    serverAddr := fmt.Sprintf("%s:%d", config.Server.Host, config.Server.Port)
+    log.Info("Starting up", zap.String("server", serverAddr))
+    srv := &http.Server{
+        Handler:      router,
+        Addr:         serverAddr,
+        // Good practice: enforce timeouts for servers you create!
+        WriteTimeout: 15 * time.Second,
+        ReadTimeout:  15 * time.Second,
+    }
+    err = srv.ListenAndServe()
+    if err != nil {
+       log.Error(`Error starting server`,
+            zap.Error(err),
+            zap.String("host", config.Server.Host),
+            zap.Int("port", config.Server.Port))
+    }
+}
+
+func installMockRoutesData(mockRoutesData *MockRoutesData, router *mux.Router) {
     for _, mockRoute := range mockRoutesData.mockRoutes {
         for _, mock := range mockRoute.mocks {
             methods := wiregock.LoadMethods(*mock.Request.Method)
@@ -128,22 +180,6 @@ func main() {
 
             router.PathPrefix(url).Handler(handler).Methods(methods...)
         }
-    }
-    serverAddr := fmt.Sprintf("%s:%d", config.Server.Host, config.Server.Port)
-    log.Info("Starting up", zap.String("server", serverAddr))
-    srv := &http.Server{
-        Handler:      router,
-        Addr:         serverAddr,
-        // Good practice: enforce timeouts for servers you create!
-        WriteTimeout: 15 * time.Second,
-        ReadTimeout:  15 * time.Second,
-    }
-    err = srv.ListenAndServe()
-    if err != nil {
-       log.Error(`Error starting server`,
-            zap.Error(err),
-            zap.String("host", config.Server.Host),
-            zap.Int("port", config.Server.Port))
     }
 }
 
@@ -301,6 +337,34 @@ func generateHandler(mock *wiregock.MockData) http.HandlerFunc {
         
     }
 }
+
+func parseLogLevel(logLevel *string) zapcore.Level {
+    defaultLevel := zapcore.InfoLevel
+    if logLevel == nil {
+        return defaultLevel
+    }
+    logLevelStr := *logLevel
+    switch { 
+        case logLevelStr == "Debug": return zapcore.DebugLevel
+        // InfoLevel is the default logging priority.
+        case logLevelStr == "Info": return zapcore.InfoLevel
+        // WarnLevel logs are more important than Info, but don't need individual
+        // human review.
+        case logLevelStr == "Warn": return zapcore.WarnLevel
+        // ErrorLevel logs are high-priority. If an application is running smoothly,
+        // it shouldn't generate any error-level logs.
+        case logLevelStr == "Error": return zapcore.ErrorLevel
+        // DPanicLevel logs are particularly important errors. In development the
+        // logger panics after writing the message.
+        case logLevelStr == "DPanic": return zapcore.DPanicLevel
+        // PanicLevel logs a message, then panics.
+        case logLevelStr == "Panic": return zapcore.PanicLevel
+        // FatalLevel logs a message, then calls os.Exit(1).
+        case logLevelStr == "Fatal": return zapcore.FatalLevel
+    }
+    return defaultLevel
+} 
+
 func basicAuth(next http.HandlerFunc, username string, password string) http.HandlerFunc {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         // Extract the username and password from the request 

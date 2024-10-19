@@ -11,6 +11,7 @@ mongo:
   keyFile:
 log:
   encoding: json
+  level: Info
   output:
     - stdout
     - /tmp/logs
