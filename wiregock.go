@@ -54,15 +54,17 @@ type AppConfig struct {
 }
 
 type MockRoutesData struct {
-    mockRoutes []MockRoute
+    mockRoutes []MockRoute `json:"mockRoutes,omitempty"`
 }
 
 type MockRoute struct {
-    mocks []wiregock.MockData
+    mocks []wiregock.MockData `json:"mocks,omitempty"`
 }
 
 var log *zap.Logger
 var config AppConfig
+var mocksRoutesFiles *MockRoutesData
+var mockRoutesDataFromMongo *MockRoutesData
 
 func main() {
     var err error
@@ -105,7 +107,6 @@ func main() {
     }
     actuatorHandler := actuator.GetActuatorHandler(actuatorConfig)
     router.PathPrefix("/actuator/").Handler(actuatorHandler)
-
     if len(config.MockFiles) != 0 {
         var mockRoutes []MockRoute
         for _, file := range config.MockFiles {
@@ -127,10 +128,14 @@ func main() {
                 log.Info(`Successfully load route from file`, zap.String("urlPath", *mock.Request.UrlPath), zap.String("file", file))
             }
         }
-        installMockRoutesData(&MockRoutesData{mockRoutes}, router)
+        if(len(mockRoutes) > 0) {
+            mocksRoutesFiles = &MockRoutesData{mockRoutes}
+            installMockRoutesData(mocksRoutesFiles, router)
+        }
+
     }
     if config.Mongo != nil {
-        mockRoutesDataFromMongo := loadMocksFromMongo(
+        mockRoutesDataFromMongo = loadMocksFromMongo(
         config.Mongo.Url,
         config.Mongo.Database,
         config.Mongo.Collection,
@@ -141,7 +146,25 @@ func main() {
             installMockRoutesData(mockRoutesDataFromMongo, router)
         }
     }
+    
+    mocks := []wiregock.MockData{}
+    if mockRoutesDataFromMongo != nil {
+        for _, mockRoute := range mockRoutesDataFromMongo.mockRoutes {
+            mocks = append(mocks, mockRoute.mocks...)            
+        }
+    }
+    if mocksRoutesFiles != nil {
+        for _, mockRoute := range mocksRoutesFiles.mockRoutes {
+            mocks = append(mocks, mockRoute.mocks...)            
+        }
+    }
+    router.HandleFunc("/mocks", func(w http.ResponseWriter, r *http.Request) {
+        json.NewEncoder(w).Encode(mocks)
+    }).Methods("GET")
 
+    router.HandleFunc("/healthcheck", func(w http.ResponseWriter, r *http.Request) {
+        w.Write([]byte("OK"))
+    }).Methods("GET", "HEAD")
     serverAddr := fmt.Sprintf("%s:%d", config.Server.Host, config.Server.Port)
     log.Info("Starting up", zap.String("server", serverAddr))
     srv := &http.Server{
