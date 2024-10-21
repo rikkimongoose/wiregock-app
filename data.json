@@ -1,4 +1,4 @@
-[{
+{
     "request": {
         "urlPath": "/everything",
         "method": "ANY",
@@ -45,4 +45,4 @@
     "response": {
         "status": 200
     }
-}]
+}

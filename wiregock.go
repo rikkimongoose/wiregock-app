@@ -120,8 +120,14 @@ func main() {
             var mocks []wiregock.MockData
             err = json.Unmarshal([]byte(byteValue), &mocks)
             if err != nil {
-                log.Error(`Error parsing JSON from file`, zap.Error(err), zap.String("file", file))
-                continue
+                log.Warn(`Error parsing JSON array from file. Attempt to read as single value`, zap.Error(err), zap.String("file", file))
+                var mockSingle wiregock.MockData
+                err = json.Unmarshal([]byte(byteValue), &mockSingle)
+                if err != nil {
+                    log.Error(`Error parsing JSON single mock from file.`, zap.Error(err), zap.String("file", file))
+                    continue
+                }
+                mocks = append(mocks, mockSingle)
             }
             mockRoutes = append(mockRoutes, MockRoute{mocks})
             for _, mock := range mocks {
