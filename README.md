@@ -1,3 +1,4 @@
+
 # wiregock
 Small and very fast and stable implementation of [Wiremock](https://wiremock.org/docs/request-matching/) with Goland and MongoDB based on Gorilla MUX lib. It simulates APIs that doesn't exist yet, implementing the core subdivision of WireMock DSL. You can just easily move your WireMock configs to MongoDB, use this config for wiregock and enjoy your mock HTTP server.
 
@@ -21,6 +22,56 @@ Original WireMock, being implemented on Java, is kinda huge and complicated for 
 | log.output | LOG_OUTPUTPATH | stdout,/tmp/logs | output pipelines for logs |
 | log.erroutput | LOG_OUTPUTERRORPATH | stderr  | error pipelines for logs |
 | mockfiles | MOCKFILES_COLLECTION |   | JSON file with mocks |
+
+## Configuration mock route file example
+
+    {
+        "request": {
+            "urlPath": "/everything",
+            "method": "ANY",
+            "headers": {
+                "Accept": {
+                    "contains": "xml"
+                }
+            },
+            "queryParameters": {
+                "search_term": {
+                    "equalTo": "WireMock"
+                }
+            },
+            "cookies": {
+                "session": {
+                    "matches": ".*12345.*"
+                }
+            },
+            "bodyPatterns": [
+                {
+                    "equalToXml": "<search-results />"
+                },
+                {
+                    "matchesXPath": "//search-results"
+                }
+            ],
+            "basicAuthCredentials": {
+                "username": "jeff@example.com",
+                "password": "jeffteenjefftyjeff"
+            }
+        },
+        "response": {
+            "status": 200
+        }
+    }
+
+## Special routes
+
+* */mock* - return JSON with all loaded mocks
+* */healthcheck* healthcheck URL, returns OK if server is running
+* */actuator/env* get all the environment variables for the runtime where the application is running
+* */actuator/info*  get the basic information for an application
+* */actuator/metrics* get the runtime memory statistics for your application
+* */actuator/ping* lightweight ping endpoint that can be used along with your load balancer
+* */actuator/shutdown* bring the application down
+* */actuator/threadDump* get the trace of all the goroutines
 
 ## Request Matching
 
@@ -55,7 +106,7 @@ Will be supported in following versions:
 
 ### Request mapping
 
-* **urlPath**, **url** equality matching on path and query 
+* **urlPath** equality matching on path and query 
 * **urlPattern** regex matching on path and query
 * **method** HTTP method. To accept all, use **ANY**
 * **headers**
@@ -63,7 +114,6 @@ Will be supported in following versions:
 * **cookies**
 * **bodyPatterns**
 * **basicAuthCredentials**
-* **matchingType** accept only **ALL** (default) params or **ANY** of params
 
 ### Comparation
 
@@ -80,6 +130,10 @@ Will be supported in following versions:
 * **matchesXPath** XPath matcher described above can be combined with another matcher, such that the value returned from the XPath query is evaluated against it.
 
 ## Changelog
+
+### v0.8.8
+
+* add support of single mock route data in JSON files
 
 ### v0.8.6
 
