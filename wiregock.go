@@ -10,6 +10,7 @@ import (
     "time"
     "net/http"
     "io/ioutil"
+    "path/filepath"
     "encoding/json"
     "crypto/tls"
     "crypto/x509"
@@ -35,6 +36,7 @@ type AppConfig struct {
     Server struct {
         Host string `yaml:"host,omitempty" env:"SERVER_HOST" env-default:"localhost" env-description:"server host"`
         Port int `yaml:"port,omitempty" env:"SERVER_PORT" env-default:"8080" env-description:"server port"`
+        MultipartBuffSizeBytes int `yaml:"multipartBuffSizeBytes,omitempty" env:"MULTIPART_BUFF_SIZE" env-default:"65535" env-description:"Max multipart file size allowed"`
     } `json:"server,omitempty" yaml:"server,omitempty"`
     Mongo *struct {
         Url string `json:"url,omitempty" yaml:"url,omitempty" env:"MONGO_URL" env-default:"mongodb://localhost:27017" env-description:"MongoDB connection string"`
@@ -44,13 +46,17 @@ type AppConfig struct {
         CertFile string `json:"certFile,omitempty" yaml:"certFile,omitempty" env:"MONGO_CERT", env-default:"" env-description:"path to public client certificate"`
         KeyFile string `json:"keyFile,omitempty" yaml:"keyFile,omitempty" env:"MONGO_KEY" env-default:"" env-description:"path to private client key"`
     } `json:"mongo,omitempty" yaml:"mongo,omitempty"`
+    FileSource *struct {
+        Files []string `json:"mockfiles,omitempty" yaml:"mockfiles,omitempty" env:"MOCKFILES_COLLECTION" env-default:"" env-description:"JSON source files"`
+        Dir *string `json:"dir,omitempty" yaml:"dir,omitempty" env-default:"./", env:"MOCKFILES_DIR" env-description:"Directory with mock files"`    
+        Mask *string `json:"mask,omitempty" yaml:"mask,omitempty" env-default:"*.json", env:"MOCKFILES_MASK" env-description:"Mask for mock files"`
+    }`json:"filesource,omitempty" yaml:"filesource,omitempty"`
     Log struct {
         Level *string `json:"level,omitempty" yaml:"level,omitempty" env-default:"json", env:"LOG_LEVEL" env-description:"log output level: Debug, Info, Warn, Error, DPanic, Panic, Fatal"`
         Encoding string `json:"encoding,omitempty" yaml:"encoding,omitempty" env-default:"json", env:"LOG_ENCODING" env-description:"storage format for logs"`
         OutputPaths []string `json:"output,omitempty" yaml:"output,omitempty" env-default:"stdout,/tmp/logs" env:"LOG_OUTPUTPATH" env-description:"output pipelines for logs"`
         ErrorOutputPaths []string `json:"erroutput,omitempty" yaml:"erroutput,omitempty" env-default:"stderr" env:"LOG_OUTPUTERRORPATH" env-description:"error pipelines for logs"`
     } `json:"log,omitempty" yaml:"log,omitempty"`
-    MockFiles []string `json:"mockfiles,omitempty" yaml:"mockfiles,omitempty" env:"MOCKFILES_COLLECTION" env-default:"" env-description:"JSON source files"`
 }
 
 type MockRoutesData struct {
@@ -107,9 +113,34 @@ func main() {
     }
     actuatorHandler := actuator.GetActuatorHandler(actuatorConfig)
     router.PathPrefix("/actuator/").Handler(actuatorHandler)
-    if len(config.MockFiles) != 0 {
+    
+    filesSource := []string{}
+    dir, mask := "./", "*.json"
+    if config.FileSource != nil {
+        if(config.FileSource.Dir != nil) {
+            dir = *config.FileSource.Dir
+        }
+        if(config.FileSource.Mask != nil) {
+            mask = *config.FileSource.Mask
+        }
+        if len(config.FileSource.Files) != 0 {
+            filesSource = append(filesSource, config.FileSource.Files...)
+        }
+    }
+    foundMockfiles, err := findInDir(dir, mask)
+    if err != nil {
+        log.Error(`Unable to search files by mask.`,
+            zap.Error(err),
+            zap.String("dir", dir),
+            zap.String("mask", mask),
+        )
+    } else {
+        filesSource = append(filesSource, foundMockfiles...)
+    }
+
+    if len(filesSource) != 0 {
         var mockRoutes []MockRoute
-        for _, file := range config.MockFiles {
+        for _, file := range filesSource {
             jsonFile, err := os.Open(file)
             if err != nil {
                 log.Error(`Error loading JSON from file`, zap.Error(err), zap.String("file", file))
@@ -140,6 +171,7 @@ func main() {
         }
 
     }
+
     if config.Mongo != nil {
         mockRoutesDataFromMongo = loadMocksFromMongo(
         config.Mongo.Url,
@@ -465,4 +497,26 @@ func mongoTlsConfig(caFile string, certFile string, keyFile string) *tls.Config 
         RootCAs:      caCertPool,
         Certificates: []tls.Certificate{cert},
     }
+}
+
+func findInDir(root, pattern string) ([]string, error) {
+    var matches []string
+    err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+        if err != nil {
+            return err
+        }
+        if info.IsDir() {
+            return nil
+        }
+        if matched, err := filepath.Match(pattern, filepath.Base(path)); err != nil {
+            return err
+        } else if matched {
+            matches = append(matches, path)
+        }
+        return nil
+    })
+    if err != nil {
+        return nil, err
+    }
+    return matches, nil
 }

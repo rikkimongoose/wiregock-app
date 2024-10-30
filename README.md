@@ -17,11 +17,13 @@ Original WireMock, being implemented on Java, is kinda huge and complicated for 
 | mongo.caFile | MONGO_CA |   | path to CA certificate |
 | mongo.certFile | MONGO_CERT |   | path to public client certificate |
 | mongo.keyFile | MONGO_KEY |   | path to private client key |
+| filesource.mockfiles | MOCKFILES_COLLECTION |   | JSON file with mocks |
+| filesource.dir | MOCKFILES_DIR | ./  | Directory with mock files |
+| filesource.mask | MOCKFILES_MASK | *.json | Mask for mock files |
 | log.level | LOG_LEVEL | Info | storage format for logs |
 | log.encoding | LOG_ENCODING | json | storage format for logs: Debug, Info, Warn, Error, DPanic, Panic, Fatal |
 | log.output | LOG_OUTPUTPATH | stdout,/tmp/logs | output pipelines for logs |
 | log.erroutput | LOG_OUTPUTERRORPATH | stderr  | error pipelines for logs |
-| mockfiles | MOCKFILES_COLLECTION |   | JSON file with mocks |
 
 ## Configuration mock route file example
 
@@ -86,9 +88,6 @@ Stub matching and verification queries can use the following request attributes:
 * Cookies
 * Request body
 * Traceparent
-
-Will be supported in following versions:
-
 * Multipart files
 
 ### HTTP methods
@@ -122,18 +121,22 @@ Will be supported in following versions:
 * **contains** string contains the value
 * **matches** compare by RegExp
 * **wildcards** compare with wildcards (**\***, **?**)
-
-Will be supported in following versions:
-
 * **equalToJson** if the attribute (most likely the request body in practice) is valid JSON and is a semantic match for the expected value.
 * **equalToXml** if the attribute value is valid XML and is semantically equal to the expected XML document
 * **matchesXPath** XPath matcher described above can be combined with another matcher, such that the value returned from the XPath query is evaluated against it.
 
 ## Changelog
 
+### v0.10.0
+
+* Add support for multipart form data
+* Add support for filters: **equalToJson**, **equalToXml**, **matchesXPath**
+* Add support for filter strategies: **Includes**, **HasExactly**
+* Add support for loading all mock files from a directory
+
 ### v0.8.8
 
-* add support of single mock route data in JSON files
+* add support of mock route data in JSON files
 
 ### v0.8.6
 

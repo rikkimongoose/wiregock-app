@@ -1,6 +1,7 @@
 server:
   host: 127.0.0.1
   port: 8080
+  multipartBuffSizeBytes: 0xFFFF
 mongo:
   url: mongodb://localhost:27017
   db: local
