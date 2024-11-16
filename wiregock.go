@@ -81,8 +81,7 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("Unable to load config file %s. Error: %s", cfgPath, err))
 	}
-	encoderCfg := zap.NewProductionEncoderCone)
-	flusher.Flush()fig()
+	encoderCfg := zap.NewProductionEncoderConfig()
 	encoderCfg.TimeKey = "timestamp"
 	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
 
