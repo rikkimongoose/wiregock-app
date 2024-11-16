@@ -3,7 +3,7 @@ module github.com/rikkimongoose/wiregock-app
 go 1.22.1
 
 require (
-	github.com/rikkimongoose/wiregock v1.0.0-alpha
+	github.com/rikkimongoose/wiregock v1.0.1
 	github.com/gorilla/mux v1.8.1
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/sinhashubham95/go-actuator v1.4.0

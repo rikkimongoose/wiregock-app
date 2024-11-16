@@ -10,7 +10,10 @@ Original WireMock, being implemented on Java, is kinda huge and complicated for 
 |---|---|---|---|
 |              | CONFIG | config.yml | path to configuration file (supports YAML, JSON and TOML) |
 | server.host | SERVER_HOST | localhost | server host  |
-| server.host | SERVER_POST | 8080   server port |
+| server.port | SERVER_PORT | 8080  | server port |
+| server.multipartBuffSizeBytes | MULTIPART_BUFF_SIZE | 0x2000000 | max multipart file size allowed |
+| server.writeTimeoutSec | WRITE_TIMEOUT_SEC | 15 | max duration before timing out writes of the response |
+| server.readTimeoutSec | READ_TIMEOUT_SEC | 15 | max duration for reading the entire request |
 | mongo.url | MONGO_URL | mongodb://localhost:27017 | MongoDB connection string |
 | mongo.db | MONGO_DB | local | MongoDB database name |
 | mongo.collection | MONGO_COLLECTION | mocks | MongoDB collection of mocks |
@@ -105,7 +108,7 @@ Stub matching and verification queries can use the following request attributes:
 
 ### Request mapping
 
-* **urlPath** equality matching on path and query 
+* **urlPath**, **url** equality matching on path and query 
 * **urlPattern** regex matching on path and query
 * **method** HTTP method. To accept all, use **ANY**
 * **headers**
@@ -113,6 +116,7 @@ Stub matching and verification queries can use the following request attributes:
 * **cookies**
 * **bodyPatterns**
 * **basicAuthCredentials**
+* **matchingType** accept only **ALL** (default) params or **ANY** of params
 
 ### Comparation
 
@@ -123,16 +127,34 @@ Stub matching and verification queries can use the following request attributes:
 * **wildcards** compare with wildcards (**\***, **?**)
 * **equalToJson** if the attribute (most likely the request body in practice) is valid JSON and is a semantic match for the expected value.
 * **equalToXml** if the attribute value is valid XML and is semantically equal to the expected XML document
-* **matchesXPath** XPath matcher described above can be combined with another matcher, such that the value returned from the XPath query is evaluated against it.
+* **matchesXPath** XPath matcher for XML objects.
+
+### Response
+
+* **status**
+* **body**
+* **bodyFileName**
+* **jsonBody**
+* **headers**
+* **cookies**
+
+## To Be Implemented
+
+### Comparation
+
+* **matchesJsonPath** JSON matcher
+* **matchesJsonSchema** JSON schema matcher
+
+### Templates
+
+Templates support with default request variables like it was implemented in Wiremock.
 
 ## Changelog
 
 ### v0.10.0
 
-* Add support for multipart form data
-* Add support for filters: **equalToJson**, **equalToXml**, **matchesXPath**
-* Add support for filter strategies: **Includes**, **HasExactly**
-* Add support for loading all mock files from a directory
+* add **equalToJson**, **equalToXml**, **matchesXPath** support
+* add multipart files support
 
 ### v0.9.2
 

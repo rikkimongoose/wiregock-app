@@ -1,15 +1,17 @@
 server:
   host: 127.0.0.1
   port: 8080
-  multipartBuffSizeBytes: 0xFFFF
-mongo:
-  url: mongodb://localhost:27017
-  db: local
-  collection:
-    - mock
-  caFile:
-  certFile:
-  keyFile:
+  multipartBuffSizeBytes: 0x2000000
+  writeTimeoutSec: 15
+  readTimeoutSec: 15
+# mongo:
+#   url: mongodb://localhost:27017
+#   db: local
+#   collection:
+#     - mock
+#  caFile:
+#  certFile:
+#  keyFile:
 log:
   encoding: json
   level: Info

@@ -10,7 +10,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,14 +29,16 @@ import (
 
 const (
 	productName    = "WireGock"
-	productVersion = "0.8.8"
+	productVersion = "0.10.0"
 )
 
 type AppConfig struct {
 	Server struct {
 		Host                   string `yaml:"host,omitempty" env:"SERVER_HOST" env-default:"localhost" env-description:"server host"`
 		Port                   int    `yaml:"port,omitempty" env:"SERVER_PORT" env-default:"8080" env-description:"server port"`
-		MultipartBuffSizeBytes int    `yaml:"multipartBuffSizeBytes,omitempty" env:"MULTIPART_BUFF_SIZE" env-default:"65535" env-description:"Max multipart file size allowed"`
+		MultipartBuffSizeBytes int64  `yaml:"multipartBuffSizeBytes,omitempty" env:"MULTIPART_BUFF_SIZE" env-default:"33554432" env-description:"max multipart file size allowed"`
+		WriteTimeoutSec        int    `yaml:"writeTimeoutSec,omitempty" env:"WRITE_TIMEOUT_SEC" env-default:"15" env-description:"max duration before timing out writes of the response"`
+		ReadTimeoutSec         int    `yaml:"readTimeoutSec,omitempty" env:"READ_TIMEOUT_SEC" env-default:"15" env-description:"max duration for reading the entire request"`
 	} `json:"server,omitempty" yaml:"server,omitempty"`
 	Mongo *struct {
 		Url        string   `json:"url,omitempty" yaml:"url,omitempty" env:"MONGO_URL" env-default:"mongodb://localhost:27017" env-description:"MongoDB connection string"`
@@ -80,7 +81,8 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("Unable to load config file %s. Error: %s", cfgPath, err))
 	}
-	encoderCfg := zap.NewProductionEncoderConfig()
+	encoderCfg := zap.NewProductionEncoderCone)
+	flusher.Flush()fig()
 	encoderCfg.TimeKey = "timestamp"
 	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
 
@@ -150,9 +152,9 @@ func main() {
 			defer jsonFile.Close()
 			byteValue, _ := io.ReadAll(jsonFile)
 			var mocks []wiregock.MockData
-			err = json.Unmarshal([]byte(byteValue), &mocks)
+			err = json.Unmarshal(byteValue, &mocks)
 			if err != nil {
-				log.Warn(`Error parsing JSON array from file. Attempt to read as single value`, zap.Error(err), zap.String("file", file))
+				log.Warn(`Unable to parse JSON array from file. Attempt to read as single value`, zap.Error(err), zap.String("file", file))
 				var mockSingle wiregock.MockData
 				err = json.Unmarshal([]byte(byteValue), &mockSingle)
 				if err != nil {
@@ -209,8 +211,8 @@ func main() {
 		Handler: router,
 		Addr:    serverAddr,
 		// Good practice: enforce timeouts for servers you create!
-		WriteTimeout: 15 * time.Second,
-		ReadTimeout:  15 * time.Second,
+		WriteTimeout: time.Duration(config.Server.WriteTimeoutSec),
+		ReadTimeout:  time.Duration(config.Server.ReadTimeoutSec),
 	}
 	err = srv.ListenAndServe()
 	if err != nil {
@@ -306,11 +308,43 @@ func loadMock(db string, client *mongo.Client, ctx *context.Context, mockSource 
 	return &MockRoute{mocks}
 }
 
+func loadMultipartFiles(req *http.Request) ([]wiregock.FileFormData, error) {
+	if req.MultipartForm == nil {
+		err := req.ParseMultipartForm(config.Server.MultipartBuffSizeBytes)
+		if err != nil {
+			return nil, err
+		}
+	}
+	fileFormDatas := []wiregock.FileFormData{}
+	for _, formFiles := range req.MultipartForm.File {
+		for _, formFile := range formFiles {
+			b, errInner := formFile.Open()
+			if errInner != nil {
+				log.Error("Unable to load multipart file", zap.Error(errInner), zap.String("file", formFile.Filename))
+				continue
+			}
+			sliceByte, errInner := io.ReadAll(b)
+			if errInner != nil {
+				log.Error("Unable to parse multipart file", zap.Error(errInner), zap.String("file", formFile.Filename))
+				continue
+			}
+			fileFormData := wiregock.FileFormData{
+				FileName: formFile.Filename,
+				Headers:  formFile.Header,
+				Data:     string(sliceByte),
+			}
+			fileFormDatas = append(fileFormDatas, fileFormData)
+		}
+	}
+	return fileFormDatas, nil
+}
+
 func generateHandler(mock *wiregock.MockData) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		multipartFiles := []wiregock.FileFormData{}
 		dc := wiregock.DataContext{
 			Body: func() string {
-				b, err := ioutil.ReadAll(req.Body)
+				b, err := io.ReadAll(req.Body)
 				if err != nil {
 					return ""
 				}
@@ -319,8 +353,20 @@ func generateHandler(mock *wiregock.MockData) http.HandlerFunc {
 			Get: func(key string) string {
 				return req.Header.Get(key)
 			},
+			GetMulti: func(key string) []string {
+				return req.Header.Values(key)
+			},
 			Params: func(key string) string {
 				return req.URL.Query().Get(key)
+			},
+			ParamsMulti: func(key string) []string {
+				return req.URL.Query()[key]
+			},
+			FormValue: func(key string) string {
+				return req.FormValue(key)
+			},
+			MultipartForm: func() []wiregock.FileFormData {
+				return multipartFiles
 			},
 			Cookies: func(key string) string {
 				cookie, err := req.Cookie(key)
@@ -330,17 +376,26 @@ func generateHandler(mock *wiregock.MockData) http.HandlerFunc {
 				return cookie.Value
 			},
 		}
+		parsedCondition, err := wiregock.ParseCondition(mock.Request, &dc)
+		if err != nil {
+			http.Error(w, "Wrong condition", http.StatusInternalServerError)
+			return
+		}
+		if parsedCondition.IsMultipart {
+			multipartFilesLoaded, err := loadMultipartFiles(req)
+			if err != nil {
+				http.Error(w, "Unable to parse multipart files", http.StatusInternalServerError)
+				return
+			}
+			multipartFiles = append(multipartFiles, multipartFilesLoaded...)
+		}
+
 		flusher, ok := w.(http.Flusher)
 		if !ok {
 			http.NotFound(w, req)
 			return
 		}
-		condition, err := wiregock.ParseCondition(mock.Request, &dc)
-		if err != nil {
-			http.Error(w, "Wrong condition", http.StatusInternalServerError)
-			return
-		}
-		result, err := condition.Check()
+		result, err := parsedCondition.Condition.Check()
 		if err != nil {
 			http.Error(w, "Error with rule execution", http.StatusInternalServerError)
 			return
@@ -389,6 +444,21 @@ func generateHandler(mock *wiregock.MockData) http.HandlerFunc {
 		if statusCode != http.StatusOK {
 			w.WriteHeader(statusCode)
 		}
+
+		if response.BodyFileName != nil {
+			bodyFileName := *response.BodyFileName
+			bodyFile, err := os.Open(bodyFileName)
+			if err != nil {
+				log.Error(`Error loading data from response file`, zap.Error(err), zap.String("file", bodyFileName))
+			} else {
+				byteValue, _ := io.ReadAll(bodyFile)
+				flusher.Flush()
+				io.Writer.Write(w, byteValue)
+			}
+			defer bodyFile.Close()
+
+		}
+
 		if response.Body != nil {
 			flusher.Flush()
 			io.WriteString(w, *response.Body)
