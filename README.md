@@ -134,7 +134,6 @@ Stub matching and verification queries can use the following request attributes:
 * **status**
 * **body**
 * **bodyFileName**
-* **jsonBody**
 * **headers**
 * **cookies**
 
