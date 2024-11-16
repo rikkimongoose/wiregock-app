@@ -134,6 +134,10 @@ Stub matching and verification queries can use the following request attributes:
 * Add support for filter strategies: **Includes**, **HasExactly**
 * Add support for loading all mock files from a directory
 
+### v0.9.2
+
+* some refactoring
+
 ### v0.9.0
 
 * add support of loading mocks from files by directory

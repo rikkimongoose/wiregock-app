@@ -3,9 +3,9 @@ module github.com/rikkimongoose/wiregock-app
 go 1.22.1
 
 require (
+	github.com/rikkimongoose/wiregock v1.0.0-alpha
 	github.com/gorilla/mux v1.8.1
 	github.com/ilyakaznacheev/cleanenv v1.5.0
-	github.com/rikkimongoose/wiregock v0.8.2
 	github.com/sinhashubham95/go-actuator v1.4.0
 	go.mongodb.org/mongo-driver v1.17.1
 	go.uber.org/zap v1.27.0
