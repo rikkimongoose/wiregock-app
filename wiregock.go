@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cbroglie/mustache"
 	"github.com/gorilla/mux"
 	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/rikkimongoose/wiregock"
@@ -29,7 +30,7 @@ import (
 
 const (
 	productName    = "WireGock"
-	productVersion = "0.10.0"
+	productVersion = "0.10.4"
 )
 
 type AppConfig struct {
@@ -436,6 +437,13 @@ func generateHandler(mock *wiregock.MockData) http.HandlerFunc {
 			}
 		}
 
+		requestData, err := wiregock.LoadRequestData(req)
+		if err != nil {
+			log.Error("Load template data from request", zap.Error(err))
+			http.Error(w, "Error loading template data from request", http.StatusInternalServerError)
+			return
+		}
+
 		statusCode := http.StatusOK
 		if response.Status != nil {
 			statusCode = *response.Status
@@ -446,6 +454,14 @@ func generateHandler(mock *wiregock.MockData) http.HandlerFunc {
 
 		if response.BodyFileName != nil {
 			bodyFileName := *response.BodyFileName
+			if requestData != nil {
+				bodyFileName, err = mustache.Render(bodyFileName, requestData)
+				if err != nil {
+					log.Error("Implementing template data to bodyFileName", zap.Error(err))
+					http.Error(w, "Error implementing template data to bodyFileName", http.StatusInternalServerError)
+					return
+				}
+			}
 			bodyFile, err := os.Open(bodyFileName)
 			if err != nil {
 				log.Error(`Error loading data from response file`, zap.Error(err), zap.String("file", bodyFileName))
@@ -455,12 +471,20 @@ func generateHandler(mock *wiregock.MockData) http.HandlerFunc {
 				io.Writer.Write(w, byteValue)
 			}
 			defer bodyFile.Close()
-
 		}
 
 		if response.Body != nil {
+			responseBody := *response.Body
+			if requestData != nil {
+				responseBody, err = mustache.Render(responseBody, requestData)
+				if err != nil {
+					log.Error("Implementing template data to responseBody", zap.Error(err))
+					http.Error(w, "Error implementing template data to responseBody", http.StatusInternalServerError)
+					return
+				}
+			}
 			flusher.Flush()
-			io.WriteString(w, *response.Body)
+			io.WriteString(w, responseBody)
 		}
 
 	}
