@@ -1,4 +1,5 @@
 
+
 # wiregock
 Small and very fast and stable implementation of [Wiremock](https://wiremock.org/docs/request-matching/) with Goland and MongoDB based on Gorilla MUX lib. It simulates APIs that doesn't exist yet, implementing the core subdivision of WireMock DSL. You can just easily move your WireMock configs to MongoDB, use this config for wiregock and enjoy your mock HTTP server.
 
@@ -143,15 +144,15 @@ Templates are based on [mustache](https://mustache.github.io/) engine. There's s
 
 * **request.id** - The unique ID of each request
 * **request.url** - URL path and query
-* **#request.queryFull.<key>** - values of a query parameter (zero indexed) e.g. *{{#request.queryFull.search}}{{.}}{{/request.queryFull.search}}*
-* **request.query.<key>** - First value of a query parameter e.g. *request.query.search*
+* **#request.queryFull.\<key>** - values of a query parameter (zero indexed) e.g. *{{#request.queryFull.search}}{{.}}{{/request.queryFull.search}}*
+* **request.query.\<key>** - First value of a query parameter e.g. *request.query.search*
 * **request.method** - request method e.g. *POST*
 * **request.host** - hostname part of the URL e.g. *my.example.com*
 * **request.port** - port number e.g. *8080*
 * **request.scheme** - protocol part of the URL e.g. *https*
 * **request.baseUrl** - URL up to the start of the path e.g. *https://my.example.com:8080*
-* **#request.headersFull.<key>** - values of a header (zero indexed) e.g. *{{#request.headers.ManyThings}}{{.}}{{/request.headers.ManyThings}}*
-* **request.headers.<key>** - first value of a request header e.g. *request.headers.X-Request-Id*
+* **#request.headersFull.\<key>** - values of a header (zero indexed) e.g. *{{#request.headers.ManyThings}}{{.}}{{/request.headers.ManyThings}}*
+* **request.headers.\<key>** - first value of a request header e.g. *request.headers.X-Request-Id*
 * **request.cookies.<key>** - First value of a request cookie e.g. *request.cookies.JSESSIONID*
 * **request.body** - Request body text (avoid for non-text bodies)
 * **request.bodyAsBase64** - The Base64 representation of the request body.
