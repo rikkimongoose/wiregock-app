@@ -129,6 +129,12 @@ Stub matching and verification queries can use the following request attributes:
 * **equalToJson** if the attribute (most likely the request body in practice) is valid JSON and is a semantic match for the expected value.
 * **equalToXml** if the attribute value is valid XML and is semantically equal to the expected XML document
 * **matchesXPath** XPath matcher for XML objects.
+* **ignoreArrayOrder** ignore order of array items
+* **ignoreExtraElements** ignore extra elements of array items
+* **matchesJsonPath** check by Json Path
+* **matchesJsonSchema** check by Json Schema
+* **includes** possible elements
+* **hasExactly** exact elements 
 
 ### Response
 
@@ -151,8 +157,8 @@ Templates are based on [mustache](https://mustache.github.io/) engine. There's s
 * **request.port** - port number e.g. *8080*
 * **request.scheme** - protocol part of the URL e.g. *https*
 * **request.baseUrl** - URL up to the start of the path e.g. *https://my.example.com:8080*
-* **#request.headersFull.\<key>** - values of a header (zero indexed) e.g. *{{#request.headers.ManyThings}}{{.}}{{/request.headers.ManyThings}}*
-* **request.headers.\<key>** - first value of a request header e.g. *request.headers.X-Request-Id*
+* **request.headersFull.<key>** - values of a header (zero indexed) e.g. *{{#request.headers.ManyThings}}{{.}}{{/request.headers.ManyThings}}*
+* **request.headers.<key>** - first value of a request header e.g. *request.headers.X-Request-Id*
 * **request.cookies.<key>** - First value of a request cookie e.g. *request.cookies.JSESSIONID*
 * **request.body** - Request body text (avoid for non-text bodies)
 * **request.bodyAsBase64** - The Base64 representation of the request body.
@@ -170,6 +176,11 @@ Templates are based on [mustache](https://mustache.github.io/) engine. There's s
 * **request.parts** template for multipart files
 
 ## Changelog
+
+### v0.10.6
+
+* add templates support
+* add JsonPath and JsonSchema support
 
 ### v0.10.4
 

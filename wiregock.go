@@ -30,7 +30,7 @@ import (
 
 const (
 	productName    = "WireGock"
-	productVersion = "0.10.4"
+	productVersion = "0.10.6"
 )
 
 type AppConfig struct {
@@ -455,20 +455,20 @@ func generateHandler(mock *wiregock.MockData) http.HandlerFunc {
 		if response.BodyFileName != nil {
 			bodyFileName := *response.BodyFileName
 			if requestData != nil {
-				bodyFileName, err = mustache.Render(bodyFileName, requestData)
-				if err != nil {
-					log.Error("Implementing template data to bodyFileName", zap.Error(err))
-					http.Error(w, "Error implementing template data to bodyFileName", http.StatusInternalServerError)
-					return
-				}
+				bodyFileName = replaceMustache(w, bodyFileName, requestData)
 			}
 			bodyFile, err := os.Open(bodyFileName)
-			if err != nil {
-				log.Error(`Error loading data from response file`, zap.Error(err), zap.String("file", bodyFileName))
+			if err == nil {
+				byteValue, err := io.ReadAll(bodyFile)
+				if err == nil {
+					flusher.Flush()
+					bodyFileData := replaceMustache(w, string(byteValue), requestData)
+					io.WriteString(w, bodyFileData)
+				} else {
+					log.Error(`Error reading all data from response file`, zap.Error(err), zap.String("file", bodyFileName))
+				}
 			} else {
-				byteValue, _ := io.ReadAll(bodyFile)
-				flusher.Flush()
-				io.Writer.Write(w, byteValue)
+				log.Error(`Error loading data from response file`, zap.Error(err), zap.String("file", bodyFileName))
 			}
 			defer bodyFile.Close()
 		}
@@ -476,18 +476,59 @@ func generateHandler(mock *wiregock.MockData) http.HandlerFunc {
 		if response.Body != nil {
 			responseBody := *response.Body
 			if requestData != nil {
-				responseBody, err = mustache.Render(responseBody, requestData)
-				if err != nil {
-					log.Error("Implementing template data to responseBody", zap.Error(err))
-					http.Error(w, "Error implementing template data to responseBody", http.StatusInternalServerError)
-					return
-				}
+				responseBody = replaceMustache(w, responseBody, requestData)
 			}
 			flusher.Flush()
 			io.WriteString(w, responseBody)
 		}
 
 	}
+}
+
+func replaceMustache(w http.ResponseWriter, body string, context ...interface{}) string {
+	result, err := mustache.Render(body, context)
+	if err == nil {
+		fileLinksList := wiregock.LoadFileLinksList(result)
+		if len(fileLinksList) > 0 {
+			filesDataMap := loadFilesData(fileLinksList)
+			if len(filesDataMap) > 0 {
+				filesDataMap := updateMustacheDataInFiles(filesDataMap, context)
+				result = wiregock.UpdateFileLinks(body, filesDataMap)
+			}
+		}
+		return result
+	}
+	log.Error("Implementing template data to responseBody", zap.Error(err))
+	if w != nil {
+		http.Error(w, "Error implementing template data to responseBody", http.StatusInternalServerError)
+	}
+	return body
+}
+
+func loadFilesData(fileNames []string) map[string]string {
+	resultMap := make(map[string]string)
+	for _, fileName := range fileNames {
+		b, err := os.ReadFile(fileName)
+		if err != nil {
+			log.Warn("Unable to load data from file, mentioned in template", zap.Error(err), zap.String("templateFileName", fileName))
+			continue
+		}
+		resultMap[fileName] = string(b)
+	}
+	return resultMap
+}
+
+func updateMustacheDataInFiles(dataMap map[string]string, context ...interface{}) map[string]string {
+	resultMap := make(map[string]string)
+	for fileName, fileSource := range dataMap {
+		result, err := mustache.Render(fileSource, context)
+		if err != nil {
+			log.Warn("Wrong mustache template in file.", zap.Error(err), zap.String("templateFileName", fileName))
+			resultMap[fileName] = fileSource
+		}
+		resultMap[fileName] = result
+	}
+	return resultMap
 }
 
 func parseLogLevel(logLevel *string) zapcore.Level {
