@@ -90,6 +90,8 @@ github.com/rikkimongoose/wiregock v1.2.0 h1:CtgQHi6Yk7wjxTudA52PrGJlCmR0AHygRpql
 github.com/rikkimongoose/wiregock v1.2.0/go.mod h1:bS7al6XtRKyCo3cT15YPcysXmOyODFPgwoIIyqvrBtQ=
 github.com/rikkimongoose/wiregock v1.4.0 h1:g2ONjTNhiv1xO/bVWBNFbraPayMxpStq6ZAvRhGlUpE=
 github.com/rikkimongoose/wiregock v1.4.0/go.mod h1:t0R6tZjWPd6xLe7vi5Je9sOsPXc7iXg6++xFY/TbId4=
+github.com/rikkimongoose/wiregock v1.4.1 h1:reYaRTPvb+mpjdSzdk+7f9cX1rvPexzTn769jabcw+U=
+github.com/rikkimongoose/wiregock v1.4.1/go.mod h1:t0R6tZjWPd6xLe7vi5Je9sOsPXc7iXg6++xFY/TbId4=
 github.com/rivo/uniseg v0.2.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.4.7 h1:WUdvkW8uEhrYfLC4ZzdpI2ztxP1I582+49Oc5Mq64VQ=
 github.com/rivo/uniseg v0.4.7/go.mod h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUcx88=

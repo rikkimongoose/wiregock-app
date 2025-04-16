@@ -70,10 +70,77 @@ type MockRoute struct {
 	Mocks []wiregock.MockData `json:"mocks,omitempty"`
 }
 
+type DataLoader interface {
+	read(file string) ([]byte, error)
+	readString(file string) string
+	readStrings(fileNames []string) map[string]string
+}
+
+type IOLoader struct {
+	Log *zap.Logger
+}
+
+type MockLoader struct {
+	Data map[string]string
+}
+
+func (ioLoader IOLoader) read(file string) ([]byte, error) {
+	byteValue, err := os.ReadFile(file)
+	if err != nil {
+		ioLoader.Log.Error(`Error reading text from file`, zap.Error(err), zap.String("file", file))
+		return []byte{}, err
+	}
+	return byteValue, nil
+}
+
+func (ioLoader IOLoader) readString(file string) string {
+	byteValue, err := ioLoader.read(file)
+	if err != nil {
+		return ""
+	}
+	return string(byteValue)
+}
+
+func (ioLoader IOLoader) readStrings(fileNames []string) map[string]string {
+	return readStringsData(fileNames)
+}
+
+func (mockLoader MockLoader) read(file string) ([]byte, error) {
+	if value, exists := mockLoader.Data[file]; exists {
+		return []byte(value), nil
+	}
+	return []byte{}, nil
+}
+
+func (mockLoader MockLoader) readString(file string) string {
+	if value, exists := mockLoader.Data[file]; exists {
+		return value
+	}
+	return ""
+}
+
+func (mockLoader MockLoader) readStrings(fileNames []string) map[string]string {
+	return readStringsData(fileNames)
+}
+
+func readStringsData(fileNames []string) map[string]string {
+	resultMap := make(map[string]string)
+	for _, fileName := range fileNames {
+		b, err := os.ReadFile(fileName)
+		if err != nil {
+			log.Warn("Unable to load data from file, mentioned in template", zap.Error(err), zap.String("templateFileName", fileName))
+			continue
+		}
+		resultMap[fileName] = string(b)
+	}
+	return resultMap
+}
+
 var log *zap.Logger
 var config AppConfig
 var mocksRoutesFiles *MockRoutesData
 var mockRoutesDataFromMongo *MockRoutesData
+var dataLoader DataLoader
 
 func main() {
 	var err error
@@ -97,6 +164,7 @@ func main() {
 		},
 	}
 	log = zap.Must(zc.Build())
+	dataLoader = IOLoader{log}
 
 	defer log.Sync() // все асинхронные логи будут записаны перед выходом
 
@@ -144,19 +212,17 @@ func main() {
 	if len(filesSource) != 0 {
 		var mockRoutes []MockRoute
 		for _, file := range filesSource {
-			jsonFile, err := os.Open(file)
+			jsonValue, err := dataLoader.read(file)
 			if err != nil {
 				log.Error(`Error loading JSON from file`, zap.Error(err), zap.String("file", file))
 				continue
 			}
-			defer jsonFile.Close()
-			byteValue, _ := io.ReadAll(jsonFile)
 			var mocks []wiregock.MockData
-			err = json.Unmarshal(byteValue, &mocks)
+			err = json.Unmarshal(jsonValue, &mocks)
 			if err != nil {
 				log.Warn(`Unable to parse JSON array from file. Attempt to read as single value`, zap.Error(err), zap.String("file", file))
 				var mockSingle wiregock.MockData
-				err = json.Unmarshal([]byte(byteValue), &mockSingle)
+				err = json.Unmarshal(jsonValue, &mockSingle)
 				if err != nil {
 					log.Error(`Error parsing JSON single mock from file.`, zap.Error(err), zap.String("file", file))
 					continue
@@ -227,7 +293,11 @@ func installMockRoutesData(mockRoutesData *MockRoutesData, router *mux.Router) {
 	for _, mockRoute := range mockRoutesData.MockRoutes {
 		for _, mock := range mockRoute.Mocks {
 			methods := wiregock.LoadMethods(*mock.Request.Method)
-			handler := generateHandler(&mock)
+			if len(methods) == 0 {
+				log.Warn(`No method defined for mock. Default method GET is used`)
+				methods = []string{"GET"}
+			}
+			handler := GenerateHandler(&mock, dataLoader)
 			if mock.Request.BasicAuthCredentials != nil && mock.Request.BasicAuthCredentials.Username != nil && mock.Request.BasicAuthCredentials.Password != nil {
 				handler = basicAuth(handler, *mock.Request.BasicAuthCredentials.Username, *mock.Request.BasicAuthCredentials.Password)
 			}
@@ -237,8 +307,8 @@ func installMockRoutesData(mockRoutesData *MockRoutesData, router *mux.Router) {
 			} else if mock.Request.UrlPattern != nil {
 				url = *mock.Request.UrlPattern
 			} else {
-				log.Warn(`No url defined for mock`)
-				continue
+				log.Warn(`No url defined for mock. Default url is used`)
+				url = "/"
 			}
 
 			router.PathPrefix(url).Handler(handler).Methods(methods...)
@@ -339,7 +409,7 @@ func loadMultipartFiles(req *http.Request) ([]wiregock.FileFormData, error) {
 	return fileFormDatas, nil
 }
 
-func generateHandler(mock *wiregock.MockData) http.HandlerFunc {
+func GenerateHandler(mock *wiregock.MockData, dataLoader DataLoader) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		multipartFiles := []wiregock.FileFormData{}
 		dc := wiregock.DataContext{
@@ -455,28 +525,20 @@ func generateHandler(mock *wiregock.MockData) http.HandlerFunc {
 		if response.BodyFileName != nil {
 			bodyFileName := *response.BodyFileName
 			if requestData != nil {
-				bodyFileName = replaceMustache(w, bodyFileName, requestData)
+				bodyFileName = replaceMustache(w, bodyFileName, dataLoader, requestData)
 			}
-			bodyFile, err := os.Open(bodyFileName)
-			if err == nil {
-				byteValue, err := io.ReadAll(bodyFile)
-				if err == nil {
-					flusher.Flush()
-					bodyFileData := replaceMustache(w, string(byteValue), requestData)
-					io.WriteString(w, bodyFileData)
-				} else {
-					log.Error(`Error reading all data from response file`, zap.Error(err), zap.String("file", bodyFileName))
-				}
-			} else {
-				log.Error(`Error loading data from response file`, zap.Error(err), zap.String("file", bodyFileName))
+			bodyFileText := dataLoader.readString(bodyFileName)
+			if err != nil {
+				flusher.Flush()
+				bodyFileData := replaceMustache(w, bodyFileText, dataLoader, requestData)
+				io.WriteString(w, bodyFileData)
 			}
-			defer bodyFile.Close()
 		}
 
 		if response.Body != nil {
 			responseBody := *response.Body
 			if requestData != nil {
-				responseBody = replaceMustache(w, responseBody, requestData)
+				responseBody = replaceMustache(w, responseBody, dataLoader, requestData)
 			}
 			flusher.Flush()
 			io.WriteString(w, responseBody)
@@ -485,12 +547,12 @@ func generateHandler(mock *wiregock.MockData) http.HandlerFunc {
 	}
 }
 
-func replaceMustache(w http.ResponseWriter, body string, context ...interface{}) string {
+func replaceMustache(w http.ResponseWriter, body string, dataLoader DataLoader, context ...interface{}) string {
 	result, err := mustache.Render(body, context)
 	if err == nil {
 		fileLinksList := wiregock.LoadFileLinksList(result)
 		if len(fileLinksList) > 0 {
-			filesDataMap := loadFilesData(fileLinksList)
+			filesDataMap := dataLoader.readStrings(fileLinksList)
 			if len(filesDataMap) > 0 {
 				filesDataMap := updateMustacheDataInFiles(filesDataMap, context)
 				result = wiregock.UpdateFileLinks(body, filesDataMap)
@@ -503,19 +565,6 @@ func replaceMustache(w http.ResponseWriter, body string, context ...interface{})
 		http.Error(w, "Error implementing template data to responseBody", http.StatusInternalServerError)
 	}
 	return body
-}
-
-func loadFilesData(fileNames []string) map[string]string {
-	resultMap := make(map[string]string)
-	for _, fileName := range fileNames {
-		b, err := os.ReadFile(fileName)
-		if err != nil {
-			log.Warn("Unable to load data from file, mentioned in template", zap.Error(err), zap.String("templateFileName", fileName))
-			continue
-		}
-		resultMap[fileName] = string(b)
-	}
-	return resultMap
 }
 
 func updateMustacheDataInFiles(dataMap map[string]string, context ...interface{}) map[string]string {
