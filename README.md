@@ -1,6 +1,6 @@
-
-
 # wiregock
+<img src="wiregock-logo.png" alt="Логотип" height="100">
+
 Small and very fast and stable implementation of [Wiremock](https://wiremock.org/docs/request-matching/) with Goland and MongoDB based on Gorilla MUX lib. It simulates APIs that doesn't exist yet, implementing the core subdivision of WireMock DSL. You can just easily move your WireMock configs to MongoDB, use this config for wiregock and enjoy your mock HTTP server.
 
 Original WireMock, being implemented on Java, is kinda huge and complicated for ordinary testers. Golang, being compiled language, is just [faster](https://www.youtube.com/watch?v=8CiErLxdaA8).
@@ -163,19 +163,13 @@ Templates are based on [mustache](https://mustache.github.io/) engine. There's s
 * **request.body** - Request body text (avoid for non-text bodies)
 * **request.bodyAsBase64** - The Base64 representation of the request body.
 
-
-## To Be Implemented
-
-### Comparation
-
-* **matchesJsonPath** JSON matcher
-* **matchesJsonSchema** JSON schema matcher
-
-### Templates
-* **xmlPath** and **jsonPath** helpers
-* **request.parts** template for multipart files
-
 ## Changelog
+### v1.0.0
+* refactoring
+* **matchesJsonPath** JSON path implemented
+* **matchesJsonSchema** JSON schema matcher implemented
+* **xmlPath** and **jsonPath** helpers are implemented
+* **request.parts** template for multipart files is implemented
 
 ### v0.10.6
 
