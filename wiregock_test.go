@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/rikkimongoose/wiregock"
@@ -21,6 +22,14 @@ func mock(t *testing.T, body string) *wiregock.MockData {
 		t.Fatalf(`Error parsing JSON format: %s`, err)
 	}
 	return &mockData
+}
+
+func mockFile(t *testing.T, fileName string) *wiregock.MockData {
+	byteValue, err := os.ReadFile(fileName)
+	if err != nil {
+		t.Fatalf(`Error loading file %s: %s`, fileName, err)
+	}
+	return mock(t, string(byteValue))
 }
 
 func TestGenerateHandler(t *testing.T) {
@@ -49,10 +58,17 @@ func TestGenerateHandler(t *testing.T) {
 			wantBody:   "Hello, world!",
 		},
 	}
-
+	logConfig := LogConfig{
+		Encoding:         "json",
+		OutputPaths:      []string{"stdout", "/tmp/logs"},
+		ErrorOutputPaths: []string{"stderr"},
+	}
+	log := NewLogger(logConfig)
+	mustacheService := MustacheService{dataLoaderMock, log}
+	mocksHandler := MocksHandler{[]wiregock.MockData{}, dataLoaderMock, mustacheService, MocksHandlerConfig{0}, log}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := GenerateHandler(tt.mock, dataLoaderMock)
+			handler := mocksHandler.GenerateHandler(tt.mock)
 			server := httptest.NewServer(handler)
 			defer server.Close()
 
