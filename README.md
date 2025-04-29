@@ -30,7 +30,7 @@ Original WireMock, being implemented on Java, is kinda huge and complicated for 
 | log.erroutput | LOG_OUTPUTERRORPATH | stderr  | error pipelines for logs |
 
 ## Configuration mock route file example
-
+```json
     {
         "request": {
             "urlPath": "/everything",
@@ -67,7 +67,7 @@ Original WireMock, being implemented on Java, is kinda huge and complicated for 
             "status": 200
         }
     }
-
+```
 ## Special routes
 
 * */mock* - return JSON with all loaded mocks
