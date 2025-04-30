@@ -15,6 +15,10 @@ Original WireMock, being implemented on Java, is kinda huge and complicated for 
 | server.multipartBuffSizeBytes | MULTIPART_BUFF_SIZE | 0x2000000 | max multipart file size allowed |
 | server.writeTimeoutSec | WRITE_TIMEOUT_SEC | 15 | max duration before timing out writes of the response |
 | server.readTimeoutSec | READ_TIMEOUT_SEC | 15 | max duration for reading the entire request |
+| server.https | SERVER_HTTPS | false | start server in HTTPS mode |
+| server.portHttps | SERVER_PORT_HTTPS | false | server port in HTTPS mode |
+| server.certFile | HTTPS_CERT |  | path to public client certificate |
+| server.keyFile | HTTPS_KEY |  | path to private client key |
 | mongo.url | MONGO_URL | mongodb://localhost:27017 | MongoDB connection string |
 | mongo.db | MONGO_DB | local | MongoDB database name |
 | mongo.collection | MONGO_COLLECTION | mocks | MongoDB collection of mocks |

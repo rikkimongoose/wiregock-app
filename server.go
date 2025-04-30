@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
 	"time"
 
@@ -17,9 +20,15 @@ import (
 )
 
 type WiregockServer struct {
-	router *mux.Router
-	config ServerConfig
-	log    *zap.Logger
+	router   *mux.Router
+	config   ServerConfig
+	log      *zap.Logger
+	srv      *http.Server
+	srvHttps *http.Server
+}
+
+func CreateWiregockServer(router *mux.Router, config ServerConfig, log *zap.Logger) WiregockServer {
+	return WiregockServer{mux.NewRouter(), config, log, nil, nil}
 }
 
 type HandlerFactory interface {
@@ -34,20 +43,63 @@ func (server WiregockServer) Install(handlerFactory HandlerFactory) WiregockServ
 func (server WiregockServer) Start() {
 	serverAddr := fmt.Sprintf("%s:%d", server.config.Host, server.config.Port)
 	server.log.Info("Starting up", zap.String("server", serverAddr))
-	srv := &http.Server{
+	server.srv = &http.Server{
 		Handler: server.router,
 		Addr:    serverAddr,
 		// Good practice: enforce timeouts for servers you create!
 		WriteTimeout: time.Duration(server.config.WriteTimeoutSec),
 		ReadTimeout:  time.Duration(server.config.ReadTimeoutSec),
 	}
-	err := srv.ListenAndServe()
+	err := server.srv.ListenAndServe()
 	if err != nil {
 		server.log.Error(`Error starting server`,
 			zap.Error(err),
 			zap.String("host", server.config.Host),
 			zap.Int("port", server.config.Port))
 	}
+	if server.config.Https {
+		serverHttpsAddr := fmt.Sprintf("%s:%d", server.config.Host, server.config.PortHttps)
+		server.log.Info("Starting up HTTPS", zap.String("server", serverHttpsAddr))
+		server.srv = &http.Server{
+			Handler: server.router,
+			Addr:    serverHttpsAddr,
+			// Good practice: enforce timeouts for servers you create!
+			WriteTimeout: time.Duration(server.config.WriteTimeoutSec),
+			ReadTimeout:  time.Duration(server.config.ReadTimeoutSec),
+		}
+		err := server.srv.ListenAndServeTLS(server.config.CertFile, server.config.KeyFile)
+		if err != nil {
+			server.log.Error(`Error starting server`,
+				zap.Error(err),
+				zap.String("host", server.config.Host),
+				zap.Int("port", server.config.PortHttps),
+				zap.String("certFile", server.config.CertFile),
+				zap.String("keyFile", server.config.KeyFile))
+		}
+	}
+}
+
+func (server WiregockServer) Stop() {
+	servers := []*http.Server{server.srv, server.srvHttps}
+	for _, serverItem := range servers {
+		if serverItem != nil {
+			// Stopping the server
+			// Setting up signal capturing
+			stop := make(chan os.Signal, 1)
+			signal.Notify(stop, os.Interrupt)
+
+			// Waiting for SIGINT (kill -2)
+			<-stop
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := serverItem.Shutdown(ctx); err != nil {
+				server.log.Error(`Error stopping server`, zap.Error(err))
+			}
+		}
+	}
+	server.srv = nil
+	server.srvHttps = nil
 }
 
 type ActuatorHandler struct {

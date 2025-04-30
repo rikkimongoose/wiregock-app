@@ -11,11 +11,15 @@ const (
 )
 
 type ServerConfig struct {
-	Host                   string `yaml:"host,omitempty" env:"SERVER_HOST" env-default:"localhost" env-description:"server host"`
-	Port                   int    `yaml:"port,omitempty" env:"SERVER_PORT" env-default:"8080" env-description:"server port"`
-	MultipartBuffSizeBytes int64  `yaml:"multipartBuffSizeBytes,omitempty" env:"MULTIPART_BUFF_SIZE" env-default:"33554432" env-description:"max multipart file size allowed"`
-	WriteTimeoutSec        int    `yaml:"writeTimeoutSec,omitempty" env:"WRITE_TIMEOUT_SEC" env-default:"15" env-description:"max duration before timing out writes of the response"`
-	ReadTimeoutSec         int    `yaml:"readTimeoutSec,omitempty" env:"READ_TIMEOUT_SEC" env-default:"15" env-description:"max duration for reading the entire request"`
+	Host                   string `json:"host,omitempty" yaml:"host,omitempty" env:"SERVER_HOST" env-default:"localhost" env-description:"server host"`
+	Port                   int    `json:"port,omitempty" yaml:"port,omitempty" env:"SERVER_PORT" env-default:"8080" env-description:"server port"`
+	MultipartBuffSizeBytes int64  `json:"multipartBuffSizeBytes,omitempty" yaml:"multipartBuffSizeBytes,omitempty" env:"MULTIPART_BUFF_SIZE" env-default:"33554432" env-description:"max multipart file size allowed"`
+	WriteTimeoutSec        int    `json:"writeTimeoutSec,omitempty" yaml:"writeTimeoutSec,omitempty" env:"WRITE_TIMEOUT_SEC" env-default:"15" env-description:"max duration before timing out writes of the response"`
+	ReadTimeoutSec         int    `json:"readTimeoutSec,omitempty" yaml:"readTimeoutSec,omitempty" env:"READ_TIMEOUT_SEC" env-default:"15" env-description:"max duration for reading the entire request"`
+	Https                  bool   `json:"https,omitempty" yaml:"https,omitempty" env:"SERVER_HTTPS" env-default:"false" env-description:"start server in HTTPS mode"`
+	PortHttps              int    `json:"portHttps,omitempty" yaml:"portHttps,omitempty" env:"SERVER_PORT_HTTPS" env-default:"443" env-description:"server port in HTTPS mode"`
+	CertFile               string `json:"certFile,omitempty" yaml:"certFile,omitempty" env:"HTTPS_CERT" env-default:"" env-description:"path to public client certificate"`
+	KeyFile                string `json:"keyFile,omitempty" yaml:"keyFile,omitempty" env:"HTTPS_KEY" env-default:"" env-description:"path to private client key"`
 }
 
 type MongoConfig struct {
@@ -75,7 +79,7 @@ func main() {
 
 	dataLoader := IOLoader{log}
 
-	server := WiregockServer{mux.NewRouter(), config.Server, log}
+	server := CreateWiregockServer(mux.NewRouter(), config.Server, log)
 	mongoMocksLoader := MongoMocksLoader{config.Mongo, log}
 	fileMocksLoader := FileMocksLoader{config.FileSource, dataLoader, log}
 	mocks := loadMockItems([]MocksLoader{mongoMocksLoader, fileMocksLoader})
