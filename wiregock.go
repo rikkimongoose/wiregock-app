@@ -9,7 +9,7 @@ import (
 
 const (
 	productName    = "WireGock"
-	productVersion = "1.0.0"
+	productVersion = "1.2.0"
 )
 
 type ServerConfig struct {
@@ -97,7 +97,7 @@ func main() {
 		server.Install(handler)
 	}
 
-	go server.Start()
+	server.Start()
 
 	if config.FileSource == nil || config.FileSource.AutoUpdate {
 		// Watch for changes in mock files
@@ -129,7 +129,7 @@ func main() {
 						for _, handler := range handlers {
 							server.Install(handler)
 						}
-						go server.Start()
+						server.Start()
 					}
 				case err, ok := <-watcher.Errors:
 					if !ok {
@@ -141,10 +141,8 @@ func main() {
 		}()
 
 		dir := "./"
-		if config.FileSource != nil {
-			if config.FileSource.Dir != nil {
-				dir = *config.FileSource.Dir
-			}
+		if config.FileSource != nil && config.FileSource.Dir != nil {
+			dir = *config.FileSource.Dir
 		}
 		// Add a path.
 		err = watcher.Add(dir) //config.FileSource.Mask

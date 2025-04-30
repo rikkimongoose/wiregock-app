@@ -169,6 +169,10 @@ Templates are based on [mustache](https://mustache.github.io/) engine. There's s
 * **request.bodyAsBase64** - The Base64 representation of the request body.
 
 ## Changelog
+### v1.2.0
+* add support for HTTPS server 
+* add support for hot reload of mock files
+
 ### v1.0.0
 * refactoring
 * **matchesJsonPath** JSON path implemented
