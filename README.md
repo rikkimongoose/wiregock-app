@@ -28,6 +28,7 @@ Original WireMock, being implemented on Java, is kinda huge and complicated for 
 | filesource.mockfiles | MOCKFILES_COLLECTION |   | JSON file with mocks |
 | filesource.dir | MOCKFILES_DIR | ./  | Directory with mock files |
 | filesource.mask | MOCKFILES_MASK | *.json | Mask for mock files |
+| filesource.autoUpdate | MOCKFILES_AUTOUPDATE | true | Update when a mock file changed without restarting the application |
 | log.level | LOG_LEVEL | Info | storage format for logs |
 | log.encoding | LOG_ENCODING | json | storage format for logs: Debug, Info, Warn, Error, DPanic, Panic, Fatal |
 | log.output | LOG_OUTPUTPATH | stdout,/tmp/logs | output pipelines for logs |

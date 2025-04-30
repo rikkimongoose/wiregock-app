@@ -21,6 +21,7 @@ require (
 	github.com/antchfx/jsonquery v1.3.6 // indirect
 	github.com/antchfx/xmlquery v1.4.2 // indirect
 	github.com/antchfx/xpath v1.3.2 // indirect
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gofiber/utils/v2 v2.0.0-beta.7 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect

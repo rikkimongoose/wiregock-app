@@ -98,8 +98,6 @@ func (server WiregockServer) Stop() {
 			}
 		}
 	}
-	server.srv = nil
-	server.srvHttps = nil
 }
 
 type ActuatorHandler struct {

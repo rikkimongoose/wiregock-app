@@ -1,8 +1,10 @@
 package main
 
 import (
+	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/mux"
 	"github.com/rikkimongoose/wiregock"
+	"go.uber.org/zap"
 )
 
 const (
@@ -32,9 +34,10 @@ type MongoConfig struct {
 }
 
 type FileSourceConfig struct {
-	Files []string `json:"mockfiles,omitempty" yaml:"mockfiles,omitempty" env:"MOCKFILES_COLLECTION" env-default:"" env-description:"JSON source files"`
-	Dir   *string  `json:"dir,omitempty" yaml:"dir,omitempty" env-default:"./" env:"MOCKFILES_DIR" env-description:"Directory with mock files"`
-	Mask  *string  `json:"mask,omitempty" yaml:"mask,omitempty" env-default:"*.json" env:"MOCKFILES_MASK" env-description:"Mask for mock files"`
+	Files      []string `json:"mockfiles,omitempty" yaml:"mockfiles,omitempty" env:"MOCKFILES_COLLECTION" env-default:"" env-description:"JSON source files"`
+	Dir        *string  `json:"dir,omitempty" yaml:"dir,omitempty" env-default:"./" env:"MOCKFILES_DIR" env-description:"Directory with mock files"`
+	Mask       *string  `json:"mask,omitempty" yaml:"mask,omitempty" env-default:"*.json" env:"MOCKFILES_MASK" env-description:"Mask for mock files"`
+	AutoUpdate bool     `json:"autoUpdate,omitempty" yaml:"autoUpdate,omitempty" env-default:"true" env:"MOCKFILES_AUTOUPDATE" env-description:"Update when a mock file changed without restarting the application"`
 }
 
 type LogConfig struct {
@@ -63,12 +66,10 @@ type MocksLoader interface {
 	Load() []MockRoute
 }
 
-func loadMockItems(mocksLoaders []MocksLoader) []wiregock.MockData {
+func loadMockItems(mocksLoader MocksLoader) []wiregock.MockData {
 	mocks := []wiregock.MockData{}
-	for _, mocksLoader := range mocksLoaders {
-		for _, mockRoute := range mocksLoader.Load() {
-			mocks = append(mocks, mockRoute.Mocks...)
-		}
+	for _, mockRoute := range mocksLoader.Load() {
+		mocks = append(mocks, mockRoute.Mocks...)
 	}
 	return mocks
 }
@@ -82,7 +83,8 @@ func main() {
 	server := CreateWiregockServer(mux.NewRouter(), config.Server, log)
 	mongoMocksLoader := MongoMocksLoader{config.Mongo, log}
 	fileMocksLoader := FileMocksLoader{config.FileSource, dataLoader, log}
-	mocks := loadMockItems([]MocksLoader{mongoMocksLoader, fileMocksLoader})
+	mocksMongo := loadMockItems(mongoMocksLoader)
+	mocks := append(mocksMongo, loadMockItems(fileMocksLoader)...)
 
 	mustacheService := MustacheService{dataLoader, log}
 	handlers := []HandlerFactory{
@@ -94,6 +96,65 @@ func main() {
 	for _, handler := range handlers {
 		server.Install(handler)
 	}
-	server.Start()
+
+	go server.Start()
+
+	if config.FileSource == nil || config.FileSource.AutoUpdate {
+		// Watch for changes in mock files
+		// Create new watcher.
+		watcher, err := fsnotify.NewWatcher()
+		if err != nil {
+			log.Error("Unable to create watcher", zap.Error(err))
+		}
+		defer watcher.Close()
+
+		// Start listening for events.
+		go func() {
+			for {
+				select {
+				case event, ok := <-watcher.Events:
+					if !ok {
+						return
+					}
+					log.Info("Mock file changed", zap.String("file", event.Name))
+					if event.Has(fsnotify.Write) || event.Has(fsnotify.Remove) || event.Has(fsnotify.Create) {
+						server.Stop()
+						mocks := append(mocksMongo, loadMockItems(fileMocksLoader)...)
+						handlers := []HandlerFactory{
+							MocksHandler{mocks, dataLoader, mustacheService, MocksHandlerConfig{config.Server.MultipartBuffSizeBytes}, log},
+							MocksInfoHandler{mocks},
+							HealthcheckHandler{"OK"},
+							ActuatorHandler{config.Server.Port},
+						}
+						for _, handler := range handlers {
+							server.Install(handler)
+						}
+						go server.Start()
+					}
+				case err, ok := <-watcher.Errors:
+					if !ok {
+						return
+					}
+					log.Error("Unable to get watch file change", zap.Error(err))
+				}
+			}
+		}()
+
+		dir := "./"
+		if config.FileSource != nil {
+			if config.FileSource.Dir != nil {
+				dir = *config.FileSource.Dir
+			}
+		}
+		// Add a path.
+		err = watcher.Add(dir) //config.FileSource.Mask
+		if err != nil {
+			log.Error("Unable to add path to watcher", zap.Error(err))
+		} else {
+			log.Info("Add watcher for changes in directory", zap.String("directory", dir))
+		}
+		// Block main goroutine forever.
+		<-make(chan struct{})
+	}
 	defer log.Sync() // все асинхронные логи будут записаны перед выходом
 }
