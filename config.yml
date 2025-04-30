@@ -12,6 +12,10 @@ server:
 #  caFile:
 #  certFile:
 #  keyFile:
+filesource:
+  dir: "./"
+  mask: "*.json"
+  autoUpdate: true
 log:
   encoding: json
   level: Info

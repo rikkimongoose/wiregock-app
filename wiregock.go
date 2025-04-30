@@ -1,21 +1,27 @@
 package main
 
 import (
+	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/mux"
 	"github.com/rikkimongoose/wiregock"
+	"go.uber.org/zap"
 )
 
 const (
 	productName    = "WireGock"
-	productVersion = "1.0.0"
+	productVersion = "1.2.0"
 )
 
 type ServerConfig struct {
-	Host                   string `yaml:"host,omitempty" env:"SERVER_HOST" env-default:"localhost" env-description:"server host"`
-	Port                   int    `yaml:"port,omitempty" env:"SERVER_PORT" env-default:"8080" env-description:"server port"`
-	MultipartBuffSizeBytes int64  `yaml:"multipartBuffSizeBytes,omitempty" env:"MULTIPART_BUFF_SIZE" env-default:"33554432" env-description:"max multipart file size allowed"`
-	WriteTimeoutSec        int    `yaml:"writeTimeoutSec,omitempty" env:"WRITE_TIMEOUT_SEC" env-default:"15" env-description:"max duration before timing out writes of the response"`
-	ReadTimeoutSec         int    `yaml:"readTimeoutSec,omitempty" env:"READ_TIMEOUT_SEC" env-default:"15" env-description:"max duration for reading the entire request"`
+	Host                   string `json:"host,omitempty" yaml:"host,omitempty" env:"SERVER_HOST" env-default:"localhost" env-description:"server host"`
+	Port                   int    `json:"port,omitempty" yaml:"port,omitempty" env:"SERVER_PORT" env-default:"8080" env-description:"server port"`
+	MultipartBuffSizeBytes int64  `json:"multipartBuffSizeBytes,omitempty" yaml:"multipartBuffSizeBytes,omitempty" env:"MULTIPART_BUFF_SIZE" env-default:"33554432" env-description:"max multipart file size allowed"`
+	WriteTimeoutSec        int    `json:"writeTimeoutSec,omitempty" yaml:"writeTimeoutSec,omitempty" env:"WRITE_TIMEOUT_SEC" env-default:"15" env-description:"max duration before timing out writes of the response"`
+	ReadTimeoutSec         int    `json:"readTimeoutSec,omitempty" yaml:"readTimeoutSec,omitempty" env:"READ_TIMEOUT_SEC" env-default:"15" env-description:"max duration for reading the entire request"`
+	Https                  bool   `json:"https,omitempty" yaml:"https,omitempty" env:"SERVER_HTTPS" env-default:"false" env-description:"start server in HTTPS mode"`
+	PortHttps              int    `json:"portHttps,omitempty" yaml:"portHttps,omitempty" env:"SERVER_PORT_HTTPS" env-default:"443" env-description:"server port in HTTPS mode"`
+	CertFile               string `json:"certFile,omitempty" yaml:"certFile,omitempty" env:"HTTPS_CERT" env-default:"" env-description:"path to public client certificate"`
+	KeyFile                string `json:"keyFile,omitempty" yaml:"keyFile,omitempty" env:"HTTPS_KEY" env-default:"" env-description:"path to private client key"`
 }
 
 type MongoConfig struct {
@@ -28,9 +34,10 @@ type MongoConfig struct {
 }
 
 type FileSourceConfig struct {
-	Files []string `json:"mockfiles,omitempty" yaml:"mockfiles,omitempty" env:"MOCKFILES_COLLECTION" env-default:"" env-description:"JSON source files"`
-	Dir   *string  `json:"dir,omitempty" yaml:"dir,omitempty" env-default:"./" env:"MOCKFILES_DIR" env-description:"Directory with mock files"`
-	Mask  *string  `json:"mask,omitempty" yaml:"mask,omitempty" env-default:"*.json" env:"MOCKFILES_MASK" env-description:"Mask for mock files"`
+	Files      []string `json:"mockfiles,omitempty" yaml:"mockfiles,omitempty" env:"MOCKFILES_COLLECTION" env-default:"" env-description:"JSON source files"`
+	Dir        *string  `json:"dir,omitempty" yaml:"dir,omitempty" env-default:"./" env:"MOCKFILES_DIR" env-description:"Directory with mock files"`
+	Mask       *string  `json:"mask,omitempty" yaml:"mask,omitempty" env-default:"*.json" env:"MOCKFILES_MASK" env-description:"Mask for mock files"`
+	AutoUpdate bool     `json:"autoUpdate,omitempty" yaml:"autoUpdate,omitempty" env-default:"true" env:"MOCKFILES_AUTOUPDATE" env-description:"Update when a mock file changed without restarting the application"`
 }
 
 type LogConfig struct {
@@ -59,12 +66,10 @@ type MocksLoader interface {
 	Load() []MockRoute
 }
 
-func loadMockItems(mocksLoaders []MocksLoader) []wiregock.MockData {
+func loadMockItems(mocksLoader MocksLoader) []wiregock.MockData {
 	mocks := []wiregock.MockData{}
-	for _, mocksLoader := range mocksLoaders {
-		for _, mockRoute := range mocksLoader.Load() {
-			mocks = append(mocks, mockRoute.Mocks...)
-		}
+	for _, mockRoute := range mocksLoader.Load() {
+		mocks = append(mocks, mockRoute.Mocks...)
 	}
 	return mocks
 }
@@ -75,10 +80,11 @@ func main() {
 
 	dataLoader := IOLoader{log}
 
-	server := WiregockServer{mux.NewRouter(), config.Server, log}
+	server := CreateWiregockServer(mux.NewRouter(), config.Server, log)
 	mongoMocksLoader := MongoMocksLoader{config.Mongo, log}
 	fileMocksLoader := FileMocksLoader{config.FileSource, dataLoader, log}
-	mocks := loadMockItems([]MocksLoader{mongoMocksLoader, fileMocksLoader})
+	mocksMongo := loadMockItems(mongoMocksLoader)
+	mocks := append(mocksMongo, loadMockItems(fileMocksLoader)...)
 
 	mustacheService := MustacheService{dataLoader, log}
 	handlers := []HandlerFactory{
@@ -90,6 +96,63 @@ func main() {
 	for _, handler := range handlers {
 		server.Install(handler)
 	}
+
 	server.Start()
+
+	if config.FileSource == nil || config.FileSource.AutoUpdate {
+		// Watch for changes in mock files
+		// Create new watcher.
+		watcher, err := fsnotify.NewWatcher()
+		if err != nil {
+			log.Error("Unable to create watcher", zap.Error(err))
+		}
+		defer watcher.Close()
+
+		// Start listening for events.
+		go func() {
+			for {
+				select {
+				case event, ok := <-watcher.Events:
+					if !ok {
+						return
+					}
+					log.Info("Mock file changed", zap.String("file", event.Name))
+					if event.Has(fsnotify.Write) || event.Has(fsnotify.Remove) || event.Has(fsnotify.Create) {
+						server.Stop()
+						mocks := append(mocksMongo, loadMockItems(fileMocksLoader)...)
+						handlers := []HandlerFactory{
+							MocksHandler{mocks, dataLoader, mustacheService, MocksHandlerConfig{config.Server.MultipartBuffSizeBytes}, log},
+							MocksInfoHandler{mocks},
+							HealthcheckHandler{"OK"},
+							ActuatorHandler{config.Server.Port},
+						}
+						for _, handler := range handlers {
+							server.Install(handler)
+						}
+						server.Start()
+					}
+				case err, ok := <-watcher.Errors:
+					if !ok {
+						return
+					}
+					log.Error("Unable to get watch file change", zap.Error(err))
+				}
+			}
+		}()
+
+		dir := "./"
+		if config.FileSource != nil && config.FileSource.Dir != nil {
+			dir = *config.FileSource.Dir
+		}
+		// Add a path.
+		err = watcher.Add(dir) //config.FileSource.Mask
+		if err != nil {
+			log.Error("Unable to add path to watcher", zap.Error(err))
+		} else {
+			log.Info("Add watcher for changes in directory", zap.String("directory", dir))
+		}
+		// Block main goroutine forever.
+		<-make(chan struct{})
+	}
 	defer log.Sync() // все асинхронные логи будут записаны перед выходом
 }
