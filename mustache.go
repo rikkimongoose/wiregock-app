@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/cbroglie/mustache"
-	"github.com/rikkimongoose/wiregock"
 	"go.uber.org/zap"
 )
 
@@ -22,12 +21,12 @@ func (service MustacheService) replace(w http.ResponseWriter, body string, conte
 		}
 		return body
 	}
-	fileLinksList := wiregock.LoadFileLinksList(result)
+	fileLinksList := LoadFileLinksList(result)
 	if len(fileLinksList) > 0 {
 		filesDataMap := service.dataLoader.readStrings(fileLinksList)
 		if len(filesDataMap) > 0 {
 			filesDataMap := service.updateDataInFiles(filesDataMap, context)
-			result = wiregock.UpdateFileLinks(body, filesDataMap)
+			result = UpdateFileLinks(body, filesDataMap)
 		}
 	}
 	return result

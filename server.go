@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/rikkimongoose/wiregock"
 	actuator "github.com/sinhashubham95/go-actuator"
 	"go.uber.org/zap"
 )
@@ -140,7 +139,7 @@ func (handler HealthcheckHandler) Install(router *mux.Router) {
 }
 
 type MocksInfoHandler struct {
-	mocks []wiregock.MockData
+	mocks []MockData
 }
 
 func (handler MocksInfoHandler) Install(router *mux.Router) {
@@ -150,7 +149,7 @@ func (handler MocksInfoHandler) Install(router *mux.Router) {
 }
 
 type MocksHandler struct {
-	mocks           []wiregock.MockData
+	mocks           []MockData
 	dataLoader      DataLoader
 	mustacheService MustacheService
 	config          MocksHandlerConfig
@@ -163,7 +162,7 @@ type MocksHandlerConfig struct {
 
 func (mocksHandler MocksHandler) Install(router *mux.Router) {
 	for _, mock := range mocksHandler.mocks {
-		methods := wiregock.LoadMethods(*mock.Request.Method)
+		methods := LoadMethods(*mock.Request.Method)
 		if len(methods) == 0 {
 			mocksHandler.log.Warn(`No method defined for mock. Default method GET is used`)
 			methods = []string{"GET"}
@@ -234,10 +233,10 @@ func (mocksHandler MocksHandler) basicAuth(config BasicAuthConfig) http.HandlerF
 	})
 }
 
-func (mocksHandler MocksHandler) GenerateHandler(mock *wiregock.MockData) http.HandlerFunc {
+func (mocksHandler MocksHandler) GenerateHandler(mock *MockData) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		multipartFiles := []wiregock.FileFormData{}
-		dc := wiregock.DataContext{
+		multipartFiles := []FileFormData{}
+		dc := DataContext{
 			Body: func() string {
 				b, err := io.ReadAll(req.Body)
 				if err != nil {
@@ -260,7 +259,7 @@ func (mocksHandler MocksHandler) GenerateHandler(mock *wiregock.MockData) http.H
 			FormValue: func(key string) string {
 				return req.FormValue(key)
 			},
-			MultipartForm: func() []wiregock.FileFormData {
+			MultipartForm: func() []FileFormData {
 				return multipartFiles
 			},
 			Cookies: func(key string) string {
@@ -271,7 +270,7 @@ func (mocksHandler MocksHandler) GenerateHandler(mock *wiregock.MockData) http.H
 				return cookie.Value
 			},
 		}
-		parsedCondition, err := wiregock.ParseCondition(mock.Request, &dc)
+		parsedCondition, err := ParseCondition(mock.Request, &dc)
 		if err != nil {
 			http.Error(w, "Wrong condition", http.StatusInternalServerError)
 			return
@@ -302,7 +301,7 @@ func (mocksHandler MocksHandler) GenerateHandler(mock *wiregock.MockData) http.H
 
 		traceId := req.Header.Get("traceparent")
 		if strings.Compare(traceId, "") == 0 {
-			w.Header().Set("traceparent", wiregock.GenerateTraceparent())
+			w.Header().Set("traceparent", GenerateTraceparent())
 		} else {
 			w.Header().Set("traceparent", traceId)
 		}
@@ -332,7 +331,7 @@ func (mocksHandler MocksHandler) GenerateHandler(mock *wiregock.MockData) http.H
 			}
 		}
 
-		requestData, err := wiregock.LoadRequestData(req)
+		requestData, err := LoadRequestData(req)
 		if err != nil {
 			mocksHandler.log.Error("Load template data from request", zap.Error(err))
 			http.Error(w, "Error loading template data from request", http.StatusInternalServerError)
@@ -371,14 +370,14 @@ func (mocksHandler MocksHandler) GenerateHandler(mock *wiregock.MockData) http.H
 	}
 }
 
-func (mocksHandler MocksHandler) loadMultipartFiles(req *http.Request) ([]wiregock.FileFormData, error) {
+func (mocksHandler MocksHandler) loadMultipartFiles(req *http.Request) ([]FileFormData, error) {
 	if req.MultipartForm == nil {
 		err := req.ParseMultipartForm(mocksHandler.config.MultipartBuffSizeBytes)
 		if err != nil {
 			return nil, err
 		}
 	}
-	fileFormDatas := []wiregock.FileFormData{}
+	fileFormDatas := []FileFormData{}
 	for _, formFiles := range req.MultipartForm.File {
 		for _, formFile := range formFiles {
 			b, errInner := formFile.Open()
@@ -391,7 +390,7 @@ func (mocksHandler MocksHandler) loadMultipartFiles(req *http.Request) ([]wirego
 				mocksHandler.log.Error("Unable to parse multipart file", zap.Error(errInner), zap.String("file", formFile.Filename))
 				continue
 			}
-			fileFormData := wiregock.FileFormData{
+			fileFormData := FileFormData{
 				FileName: formFile.Filename,
 				Headers:  formFile.Header,
 				Data:     string(sliceByte),
