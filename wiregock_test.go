@@ -9,16 +9,14 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/rikkimongoose/wiregock"
 )
 
 func generateMockLoader() DataLoader {
 	return MockLoader{map[string]string{}}
 }
 
-func mock(t *testing.T, body string) *wiregock.MockData {
-	var mockData wiregock.MockData
+func mock(t *testing.T, body string) *MockData {
+	var mockData MockData
 	err := json.Unmarshal([]byte(body), &mockData)
 	if err != nil {
 		t.Fatalf(`Error parsing JSON format: %s`, err)
@@ -26,7 +24,7 @@ func mock(t *testing.T, body string) *wiregock.MockData {
 	return &mockData
 }
 
-func mockFile(t *testing.T, fileName string) *wiregock.MockData {
+func mockFile(t *testing.T, fileName string) *MockData {
 	byteValue, err := os.ReadFile(fileName)
 	if err != nil {
 		t.Fatalf(`Error loading file %s: %s`, fileName, err)
@@ -36,7 +34,7 @@ func mockFile(t *testing.T, fileName string) *wiregock.MockData {
 
 type TestTask struct {
 	name       string
-	mock       *wiregock.MockData
+	mock       *MockData
 	method     string
 	body       string
 	url        string
@@ -140,7 +138,7 @@ func TestGenerateHandler(t *testing.T) {
 	}
 	log := NewLogger(logConfig)
 	mustacheService := MustacheService{dataLoaderMock, log}
-	mocksHandler := MocksHandler{[]wiregock.MockData{}, dataLoaderMock, mustacheService, MocksHandlerConfig{0}, log}
+	mocksHandler := MocksHandler{[]MockData{}, dataLoaderMock, mustacheService, MocksHandlerConfig{0}, log}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := mocksHandler.GenerateHandler(tt.mock)

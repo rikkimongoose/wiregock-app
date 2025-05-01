@@ -3,13 +3,12 @@ package main
 import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/mux"
-	"github.com/rikkimongoose/wiregock"
 	"go.uber.org/zap"
 )
 
 const (
 	productName    = "WireGock"
-	productVersion = "1.2.0"
+	productVersion = "1.2.2"
 )
 
 type ServerConfig struct {
@@ -59,15 +58,15 @@ type MockRoutesData struct {
 }
 
 type MockRoute struct {
-	Mocks []wiregock.MockData `json:"mocks,omitempty"`
+	Mocks []MockData `json:"mocks,omitempty"`
 }
 
 type MocksLoader interface {
 	Load() []MockRoute
 }
 
-func loadMockItems(mocksLoader MocksLoader) []wiregock.MockData {
-	mocks := []wiregock.MockData{}
+func loadMockItems(mocksLoader MocksLoader) []MockData {
+	mocks := []MockData{}
 	for _, mockRoute := range mocksLoader.Load() {
 		mocks = append(mocks, mockRoute.Mocks...)
 	}

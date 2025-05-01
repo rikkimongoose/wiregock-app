@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/rikkimongoose/wiregock"
 	"go.uber.org/zap"
 )
 
@@ -123,11 +122,11 @@ func (loader FileMocksLoader) Load() []MockRoute {
 			loader.log.Error(`Error loading JSON from file`, zap.Error(err), zap.String("file", file))
 			continue
 		}
-		var mocks []wiregock.MockData
+		var mocks []MockData
 		err = json.Unmarshal(jsonValue, &mocks)
 		if err != nil {
 			loader.log.Warn(`Unable to parse JSON array from file. Attempt to read as single value`, zap.Error(err), zap.String("file", file))
-			var mockSingle wiregock.MockData
+			var mockSingle MockData
 			err = json.Unmarshal(jsonValue, &mockSingle)
 			if err != nil {
 				loader.log.Error(`Error parsing JSON single mock from file.`, zap.Error(err), zap.String("file", file))

@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/rikkimongoose/wiregock"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -104,7 +103,7 @@ type MongoMockRoute struct {
 }
 
 func (loader MongoMocksLoader) convertToMockRoute(mongoMockRoute MongoMockRoute) *MockRoute {
-	var mocks []wiregock.MockData
+	var mocks []MockData
 	wiregockCollection := mongoMockRoute.client.Database(mongoMockRoute.db).Collection(mongoMockRoute.mockSource)
 	cursor, err := wiregockCollection.Find(*mongoMockRoute.ctx, bson.M{})
 	if err != nil {
@@ -115,7 +114,7 @@ func (loader MongoMocksLoader) convertToMockRoute(mongoMockRoute MongoMockRoute)
 		return nil
 	}
 	for cursor.Next(*mongoMockRoute.ctx) {
-		var mock wiregock.MockData
+		var mock MockData
 		if err = cursor.Decode(&mock); err != nil {
 			loader.log.Error(`Unable to parse MockData`, zap.Error(err))
 			continue
