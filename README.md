@@ -1,7 +1,7 @@
 # wiregock
 <img src="wiregock-logo.png" alt="Логотип" height="100">
 
-Small and very fast and stable implementation of [Wiremock](https://wiremock.org/docs/request-matching/) with Goland and MongoDB based on Gorilla MUX lib. It simulates APIs that doesn't exist yet, implementing the core subdivision of WireMock DSL. You can just easily move your WireMock configs to MongoDB, use this config for wiregock and enjoy your mock HTTP server.
+Small and very fast and stable implementation of [Wiremock](https://wiremock.org/docs/request-matching/) with Golang and JSON configs (MongoDB is supported as well) based on Gorilla MUX lib. It simulates APIs that doesn't exist yet, implementing the core subdivision of WireMock DSL. You can just easily move your WireMock configs to MongoDB, use this config for wiregock and enjoy your mock HTTP server.
 
 Original WireMock, being implemented on Java, is kinda huge and complicated for ordinary testers. Golang, being compiled language, is just [faster](https://www.youtube.com/watch?v=8CiErLxdaA8).
 
