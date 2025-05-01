@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/rikkimongoose/wiregock"
@@ -32,28 +34,101 @@ func mockFile(t *testing.T, fileName string) *wiregock.MockData {
 	return mock(t, string(byteValue))
 }
 
+type TestTask struct {
+	name       string
+	mock       *wiregock.MockData
+	method     string
+	body       string
+	url        string
+	headers    map[string]string
+	cookies    map[string]string
+	wantStatus int
+	wantBody   string
+}
+
 func TestGenerateHandler(t *testing.T) {
 	dataLoaderMock := generateMockLoader()
 
-	tests := []struct {
-		name       string
-		mock       *wiregock.MockData
-		method     string
-		body       string
-		wantStatus int
-		wantBody   string
-	}{
+	tests := []TestTask{
 		{
 			name: "Successful GET request",
 			mock: mock(t, `
+						{
+						    "request": {},
+						    "response": {
+						        "body": "Hello, world!"
+						    }
+						}`),
+			method:     http.MethodGet,
+			body:       "",
+			url:        "/",
+			wantStatus: http.StatusOK,
+			wantBody:   "Hello, world!",
+		}, {
+			name: "Successful GET request to /foo",
+			mock: mock(t, `
+						{
+						    "request": { "urlPath": "/foo" },
+						    "response": {
+						        "body": "Hello, world!"
+						    }
+						}`),
+			method:     http.MethodGet,
+			body:       "",
+			url:        "/foo",
+			wantStatus: http.StatusOK,
+			wantBody:   "Hello, world!",
+		},
+		{
+			name: "Successful POST request",
+			mock: mock(t, `
+			{
+			    "request": { "headers": { "Accept": { "contains": "xml" } } },
+			    "response": {
+			        "body": "Hello, world!"
+			    }
+			}`),
+			method: http.MethodPost,
+			body:   "",
+			url:    "/",
+			headers: map[string]string{
+				"Test":   "test",
+				"Accept": "Foo.xml",
+			},
+			wantStatus: http.StatusOK,
+			wantBody:   "Hello, world!",
+		},
+		{
+			name: "Successful GET request with params",
+			mock: mock(t, `
 {
-    "request": {},
+    "request": { "queryParameters": { "foo": { "equalTo": "boo" } } },
     "response": {
         "body": "Hello, world!"
     }
 }`),
 			method:     http.MethodGet,
 			body:       "",
+			url:        "/?foo=boo",
+			wantStatus: http.StatusOK,
+			wantBody:   "Hello, world!",
+		},
+		{
+			name: "Successful POST request with cookies",
+			mock: mock(t, `
+			{
+			    "request": { "cookies": { "Accept": { "contains": "xml" } } },
+			    "response": {
+			        "body": "Hello, world!"
+			    }
+			}`),
+			method: http.MethodPost,
+			body:   "",
+			url:    "/",
+			cookies: map[string]string{
+				"Test":   "test",
+				"Accept": "Foo.xml",
+			},
 			wantStatus: http.StatusOK,
 			wantBody:   "Hello, world!",
 		},
@@ -69,37 +144,64 @@ func TestGenerateHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := mocksHandler.GenerateHandler(tt.mock)
-			server := httptest.NewServer(handler)
+
+			mux := http.NewServeMux()
+			mux.Handle(removeQueryParamsSimple(tt.url), handler)
+
+			server := httptest.NewServer(mux)
 			defer server.Close()
 
 			var reqBody = bytes.NewReader([]byte(tt.body))
 
-			req, err := http.NewRequest(tt.method, server.URL, reqBody)
-			if err != nil {
-				t.Fatalf("Failed to create request: %v", err)
-			}
+			url := fmt.Sprintf("%s%s", server.URL, tt.url)
 
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				t.Fatalf("Failed to send request: %v", err)
-			}
-			defer resp.Body.Close()
-
-			// Проверяем статус код.
-			if resp.StatusCode != tt.wantStatus {
-				t.Errorf("Expected status %v, got %v", tt.wantStatus, resp.StatusCode)
-			}
-
-			// Проверяем тело ответа.
-			body := make([]byte, len(tt.wantBody))
-			_, err = resp.Body.Read(body)
-			if err != nil && err.Error() != "EOF" {
-				t.Fatalf("Failed to read response body: %v", err)
-			}
-
-			if string(body) != tt.wantBody {
-				t.Errorf("Expected body %q, got %q", tt.wantBody, string(body))
+			switch tt.method {
+			case http.MethodGet, http.MethodDelete:
+				resp, err := http.Get(url)
+				checkReponse(resp, &tt, t, err)
+			case http.MethodPost, http.MethodPut:
+				req, err := http.NewRequest(tt.method, url, reqBody)
+				if err != nil {
+					t.Fatalf("Failed to create request: %v", err)
+				}
+				for key, val := range tt.headers {
+					req.Header.Add(key, val)
+				}
+				for key, val := range tt.cookies {
+					req.AddCookie(&http.Cookie{
+						Name:  key,
+						Value: val,
+					})
+				}
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					t.Fatalf("Failed to send request: %v", err)
+				}
+				defer resp.Body.Close()
 			}
 		})
 	}
+}
+
+func checkReponse(resp *http.Response, tt *TestTask, t *testing.T, err error) {
+	// Проверяем статус код.
+	if resp.StatusCode != tt.wantStatus {
+		t.Errorf("Expected status %v, got %v", tt.wantStatus, resp.StatusCode)
+	}
+	// Проверяем тело ответа.
+	body := make([]byte, len(tt.wantBody))
+	_, err = resp.Body.Read(body)
+	if err != nil && err.Error() != "EOF" {
+		t.Fatalf("Failed to read response body: %v", err)
+	}
+	if string(body) != tt.wantBody {
+		t.Errorf("Expected body %q, got %q", tt.wantBody, string(body))
+	}
+}
+
+func removeQueryParamsSimple(rawURL string) string {
+	if i := strings.IndexByte(rawURL, '?'); i != -1 {
+		return rawURL[:i]
+	}
+	return rawURL
 }
