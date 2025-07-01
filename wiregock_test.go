@@ -97,14 +97,33 @@ func TestGenerateHandler(t *testing.T) {
 			wantBody:   "Hello, world!",
 		},
 		{
+			name: "Successful PUT request",
+			mock: mock(t, `
+			{
+			    "request": { "headers": { "Accept": { "contains": "xml" } }, "method": "PUT" },
+			    "response": {
+			        "body": "Hello, world!"
+			    }
+			}`),
+			method: http.MethodPut,
+			body:   "",
+			url:    "/",
+			headers: map[string]string{
+				"Test":   "test",
+				"Accept": "Foo.xml",
+			},
+			wantStatus: http.StatusOK,
+			wantBody:   "Hello, world!",
+		},
+		{
 			name: "Successful GET request with params",
 			mock: mock(t, `
-{
-    "request": { "queryParameters": { "foo": { "equalTo": "boo" } } },
-    "response": {
-        "body": "Hello, world!"
-    }
-}`),
+			{
+				"request": { "queryParameters": { "foo": { "equalTo": "boo" } } },
+				"response": {
+					"body": "Hello, world!"
+				}
+			}`),
 			method:     http.MethodGet,
 			body:       "",
 			url:        "/?foo=boo",
