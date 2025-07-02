@@ -149,6 +149,53 @@ func TestGenerateHandler(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantBody:   "Hello, world!",
 		},
+		{
+			name: "Successful POST request with bodyPatterns equalToXml",
+			mock: mock(t, `
+			{
+				"request": {
+					"bodyPatterns": [
+						{
+							"equalToXml": "<search-results />"
+						}
+					]
+				},
+				"response": {
+					"body": "Hello, world!"
+				}
+			}`),
+			method:     http.MethodPost,
+			body:       "   <search-results />    ",
+			url:        "/",
+			wantStatus: http.StatusOK,
+			wantBody:   "Hello, world!",
+		},
+		{
+			name: "Successful POST request with bodyPatterns matchesXPath",
+			mock: mock(t, `
+			{
+				"request": {
+					"bodyPatterns": [
+						{
+							"matchesXPath": "/things/thing[@name = 'socks']"
+						}
+					]
+				},
+				"response": {
+					"body": "Hello, world!"
+				}
+			}`),
+			method: http.MethodPost,
+			body: `
+			<things>
+				<thing name="socks"></thing>
+				<thing name="shoes"></thing>
+			</things>
+			`,
+			url:        "/",
+			wantStatus: http.StatusOK,
+			wantBody:   "Hello, world!",
+		},
 	}
 	logConfig := LogConfig{
 		Encoding:         "json",
