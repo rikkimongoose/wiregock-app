@@ -9,16 +9,16 @@ import (
 )
 
 type DataLoader interface {
-	read(file string) ([]byte, error)
-	readString(file string) string
-	readStrings(fileNames []string) map[string]string
+	Read(file string) ([]byte, error)
+	ReadString(file string) string
+	ReadStrings(fileNames []string) map[string]string
 }
 
 type IOLoader struct {
 	log *zap.Logger
 }
 
-func (ioLoader IOLoader) read(file string) ([]byte, error) {
+func (ioLoader *IOLoader) Read(file string) ([]byte, error) {
 	byteValue, err := os.ReadFile(file)
 	if err != nil {
 		ioLoader.log.Error(`Error reading text from file`, zap.Error(err), zap.String("file", file))
@@ -27,19 +27,19 @@ func (ioLoader IOLoader) read(file string) ([]byte, error) {
 	return byteValue, nil
 }
 
-func (ioLoader IOLoader) readString(file string) string {
-	byteValue, err := ioLoader.read(file)
+func (ioLoader *IOLoader) ReadString(file string) string {
+	byteValue, err := ioLoader.Read(file)
 	if err != nil {
 		return ""
 	}
 	return string(byteValue)
 }
 
-func (ioLoader IOLoader) readStrings(fileNames []string) map[string]string {
-	return ioLoader.readStringsData(fileNames)
+func (ioLoader *IOLoader) ReadStrings(fileNames []string) map[string]string {
+	return ioLoader.ReadStringsData(fileNames)
 }
 
-func (ioLoader IOLoader) readStringsData(fileNames []string) map[string]string {
+func (ioLoader *IOLoader) ReadStringsData(fileNames []string) map[string]string {
 	resultMap := make(map[string]string)
 	for _, fileName := range fileNames {
 		b, err := os.ReadFile(fileName)
@@ -53,27 +53,40 @@ func (ioLoader IOLoader) readStringsData(fileNames []string) map[string]string {
 }
 
 type MockLoader struct {
-	Data map[string]string
+	data map[string]string
 }
 
-func (mockLoader MockLoader) read(file string) ([]byte, error) {
-	if value, exists := mockLoader.Data[file]; exists {
+func NewMockLoader() *MockLoader {
+	return &MockLoader{
+		data: make(map[string]string),
+	}
+}
+
+func (mockLoader *MockLoader) Reset(data map[string]string) {
+	clear(mockLoader.data)
+	for k, v := range data {
+		mockLoader.data[k] = v
+	}
+}
+
+func (mockLoader *MockLoader) Read(file string) ([]byte, error) {
+	if value, exists := mockLoader.data[file]; exists {
 		return []byte(value), nil
 	}
 	return []byte{}, nil
 }
 
-func (mockLoader MockLoader) readString(file string) string {
-	if value, exists := mockLoader.Data[file]; exists {
+func (mockLoader *MockLoader) ReadString(file string) string {
+	if value, exists := mockLoader.data[file]; exists {
 		return value
 	}
 	return ""
 }
 
-func (mockLoader MockLoader) readStrings(fileNames []string) map[string]string {
+func (mockLoader *MockLoader) ReadStrings(fileNames []string) map[string]string {
 	resultMap := make(map[string]string)
 	for _, fileName := range fileNames {
-		resultMap[fileName] = mockLoader.readString(fileName)
+		resultMap[fileName] = mockLoader.ReadString(fileName)
 	}
 	return resultMap
 }
@@ -113,11 +126,11 @@ func (loader *FileMocksLoader) loadFilesList() []string {
 	return filesSource
 }
 
-func (loader FileMocksLoader) Load() []MockRoute {
+func (loader *FileMocksLoader) Load() []MockRoute {
 	var mockRoutes []MockRoute
 	filesSource := loader.loadFilesList()
 	for _, file := range filesSource {
-		jsonValue, err := loader.dataLoader.read(file)
+		jsonValue, err := loader.dataLoader.Read(file)
 		if err != nil {
 			loader.log.Error(`Error loading JSON from file`, zap.Error(err), zap.String("file", file))
 			continue

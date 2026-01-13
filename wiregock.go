@@ -42,7 +42,7 @@ type FileSourceConfig struct {
 type LogConfig struct {
 	Level            *string  `json:"level,omitempty" yaml:"level,omitempty" env-default:"Info" env:"LOG_LEVEL" env-description:"log output level: Debug, Info, Warn, Error, DPanic, Panic, Fatal"`
 	Encoding         string   `json:"encoding,omitempty" yaml:"encoding,omitempty" env-default:"json" env:"LOG_ENCODING" env-description:"storage format for logs"`
-	OutputPaths      []string `json:"output,omitempty" yaml:"output,omitempty" env-default:"stdout,/tmp/logs" env:"LOG_OUTPUTPATH" env-description:"output pipelines for logs"`
+	OutputPaths      []string `json:"output,omitempty" yaml:"output,omitempty" env-default:"stdout" env:"LOG_OUTPUTPATH" env-description:"output pipelines for logs"`
 	ErrorOutputPaths []string `json:"erroutput,omitempty" yaml:"erroutput,omitempty" env-default:"stderr" env:"LOG_OUTPUTERRORPATH" env-description:"error pipelines for logs"`
 }
 
@@ -77,11 +77,11 @@ func main() {
 	config := ConfigLoader()
 	log := NewLogger(config.Log)
 
-	dataLoader := IOLoader{log}
+	dataLoader := &IOLoader{log}
 
 	server := CreateWiregockServer(mux.NewRouter(), config.Server, log)
-	mongoMocksLoader := MongoMocksLoader{config.Mongo, log}
-	fileMocksLoader := FileMocksLoader{config.FileSource, dataLoader, log}
+	mongoMocksLoader := &MongoMocksLoader{config.Mongo, log}
+	fileMocksLoader := &FileMocksLoader{config.FileSource, dataLoader, log}
 	mocksMongo := loadMockItems(mongoMocksLoader)
 	mocks := append(mocksMongo, loadMockItems(fileMocksLoader)...)
 

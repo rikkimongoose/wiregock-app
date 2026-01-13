@@ -351,8 +351,8 @@ func (mocksHandler MocksHandler) GenerateHandler(mock *MockData) http.HandlerFun
 			if requestData != nil {
 				bodyFileName = mocksHandler.mustacheService.replace(w, bodyFileName, requestData)
 			}
-			bodyFileText := mocksHandler.dataLoader.readString(bodyFileName)
-			if err != nil {
+			bodyFileText := mocksHandler.dataLoader.ReadString(bodyFileName)
+			if strings.Compare(bodyFileText, "") == 0 {
 				flusher.Flush()
 				bodyFileData := mocksHandler.mustacheService.replace(w, bodyFileText, requestData)
 				io.WriteString(w, bodyFileData)

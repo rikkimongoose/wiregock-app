@@ -23,7 +23,7 @@ func (service MustacheService) replace(w http.ResponseWriter, body string, conte
 	}
 	fileLinksList := LoadFileLinksList(result)
 	if len(fileLinksList) > 0 {
-		filesDataMap := service.dataLoader.readStrings(fileLinksList)
+		filesDataMap := service.dataLoader.ReadStrings(fileLinksList)
 		if len(filesDataMap) > 0 {
 			filesDataMap := service.updateDataInFiles(filesDataMap, context)
 			result = UpdateFileLinks(body, filesDataMap)

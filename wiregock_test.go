@@ -11,10 +11,6 @@ import (
 	"testing"
 )
 
-func generateMockLoader() DataLoader {
-	return MockLoader{map[string]string{}}
-}
-
 func mock(t *testing.T, body string) *MockData {
 	var mockData MockData
 	err := json.Unmarshal([]byte(body), &mockData)
@@ -40,12 +36,13 @@ type TestTask struct {
 	url        string
 	headers    map[string]string
 	cookies    map[string]string
+	files      map[string]string
 	wantStatus int
 	wantBody   string
 }
 
 func TestGenerateHandler(t *testing.T) {
-	dataLoaderMock := generateMockLoader()
+	dataLoaderMock := NewMockLoader()
 
 	tests := []TestTask{
 		{
@@ -109,7 +106,8 @@ func TestGenerateHandler(t *testing.T) {
 			body:       "",
 			url:        "/?foo=boo",
 			wantStatus: http.StatusOK,
-			wantBody:   "Hello, world!",
+
+			wantBody: "Hello, world!",
 		},
 		{
 			name: "Successful POST request with cookies",
@@ -133,13 +131,14 @@ func TestGenerateHandler(t *testing.T) {
 	}
 	logConfig := LogConfig{
 		Encoding:         "json",
-		OutputPaths:      []string{"stdout", "/tmp/logs"},
+		OutputPaths:      []string{"stdout"},
 		ErrorOutputPaths: []string{"stderr"},
 	}
 	log := NewLogger(logConfig)
 	mustacheService := MustacheService{dataLoaderMock, log}
 	mocksHandler := MocksHandler{[]MockData{}, dataLoaderMock, mustacheService, MocksHandlerConfig{0}, log}
 	for _, tt := range tests {
+		dataLoaderMock.Reset(tt.files)
 		t.Run(tt.name, func(t *testing.T) {
 			handler := mocksHandler.GenerateHandler(tt.mock)
 
