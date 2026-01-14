@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,17 +17,13 @@ import (
 func mock(t *testing.T, body string) *MockData {
 	var mockData MockData
 	err := json.Unmarshal([]byte(body), &mockData)
-	if err != nil {
-		t.Fatalf(`Error parsing JSON format: %s`, err)
-	}
+	require.NoError(t, err)
 	return &mockData
 }
 
 func mockFile(t *testing.T, fileName string) *MockData {
 	byteValue, err := os.ReadFile(fileName)
-	if err != nil {
-		t.Fatalf(`Error loading file %s: %s`, fileName, err)
-	}
+	require.NoError(t, err)
 	return mock(t, string(byteValue))
 }
 
@@ -195,9 +192,7 @@ func TestGenerateHandler(t *testing.T) {
 				defer resp.Body.Close()
 			case http.MethodPost, http.MethodPut:
 				req, err := http.NewRequest(tt.method, url, reqBody)
-				if err != nil {
-					t.Fatalf("Failed to create request: %v", err)
-				}
+				require.NoError(t, err)
 				for key, val := range tt.headers {
 					req.Header.Add(key, val)
 				}
@@ -209,9 +204,7 @@ func TestGenerateHandler(t *testing.T) {
 				}
 				resp, err := http.DefaultClient.Do(req)
 				checkReponse(resp, &tt, t, err)
-				if err != nil {
-					t.Fatalf("Failed to send request: %v", err)
-				}
+				require.NoError(t, err)
 				defer resp.Body.Close()
 			}
 		})
@@ -219,15 +212,15 @@ func TestGenerateHandler(t *testing.T) {
 }
 
 func checkReponse(resp *http.Response, tt *TestTask, t *testing.T, err error) {
-	// Проверяем статус код.
+	// Проверяем статус код
 	require.Equal(t, tt.wantStatus, resp.StatusCode)
-	// Проверяем тело ответа.
-	body := make([]byte, len(tt.wantBody))
-	_, err = resp.Body.Read(body)
-	if err != nil && err.Error() != "EOF" {
-		t.Fatalf("Failed to read response body: %v", err)
-	}
-	bodyStr := string(body)
+
+	// Читаем тело ответа полностью
+	bodyBytes, err := io.ReadAll(resp.Body)
+	require.NoError(t, err, "failed to read response body")
+	bodyStr := string(bodyBytes)
+
+	// Проверяем тело ответа
 	require.Equal(t, tt.wantBody, bodyStr)
 }
 
