@@ -352,11 +352,11 @@ func (mocksHandler MocksHandler) GenerateHandler(mock *MockData) http.HandlerFun
 				bodyFileName = mocksHandler.mustacheService.replace(w, bodyFileName, requestData)
 			}
 			bodyFileText := mocksHandler.dataLoader.ReadString(bodyFileName)
-			if strings.Compare(bodyFileText, "") == 0 {
-				flusher.Flush()
-				bodyFileData := mocksHandler.mustacheService.replace(w, bodyFileText, requestData)
-				io.WriteString(w, bodyFileData)
+			if requestData != nil {
+				bodyFileText = mocksHandler.mustacheService.replace(w, bodyFileText, requestData)
 			}
+			flusher.Flush()
+			io.WriteString(w, bodyFileText)
 		}
 
 		if response.Body != nil {

@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func mock(t *testing.T, body string) *MockData {
@@ -48,12 +50,12 @@ func TestGenerateHandler(t *testing.T) {
 		{
 			name: "Successful GET request",
 			mock: mock(t, `
-						{
-						    "request": {},
-						    "response": {
-						        "body": "Hello, world!"
-						    }
-						}`),
+								{
+								    "request": {},
+								    "response": {
+								        "body": "Hello, world!"
+								    }
+								}`),
 			method:     http.MethodGet,
 			body:       "",
 			url:        "/",
@@ -62,12 +64,12 @@ func TestGenerateHandler(t *testing.T) {
 		}, {
 			name: "Successful GET request to /foo",
 			mock: mock(t, `
-						{
-						    "request": { "urlPath": "/foo" },
-						    "response": {
-						        "body": "Hello, world!"
-						    }
-						}`),
+								{
+								    "request": { "urlPath": "/foo" },
+								    "response": {
+								        "body": "Hello, world!"
+								    }
+								}`),
 			method:     http.MethodGet,
 			body:       "",
 			url:        "/foo",
@@ -77,12 +79,12 @@ func TestGenerateHandler(t *testing.T) {
 		{
 			name: "Successful POST request",
 			mock: mock(t, `
-			{
-			    "request": { "headers": { "Accept": { "contains": "xml" } } },
-			    "response": {
-			        "body": "Hello, world!"
-			    }
-			}`),
+					{
+					    "request": { "headers": { "Accept": { "contains": "xml" } } },
+					    "response": {
+					        "body": "Hello, world!"
+					    }
+					}`),
 			method: http.MethodPost,
 			body:   "",
 			url:    "/",
@@ -96,12 +98,12 @@ func TestGenerateHandler(t *testing.T) {
 		{
 			name: "Successful GET request with params",
 			mock: mock(t, `
-{
-    "request": { "queryParameters": { "foo": { "equalTo": "boo" } } },
-    "response": {
-        "body": "Hello, world!"
-    }
-}`),
+		{
+		    "request": { "queryParameters": { "foo": { "equalTo": "boo" } } },
+		    "response": {
+		        "body": "Hello, world!"
+		    }
+		}`),
 			method:     http.MethodGet,
 			body:       "",
 			url:        "/?foo=boo",
@@ -112,12 +114,12 @@ func TestGenerateHandler(t *testing.T) {
 		{
 			name: "Successful POST request with cookies",
 			mock: mock(t, `
-			{
-			    "request": { "cookies": { "Accept": { "contains": "xml" } } },
-			    "response": {
-			        "body": "Hello, world!"
-			    }
-			}`),
+					{
+					    "request": { "cookies": { "Accept": { "contains": "xml" } } },
+					    "response": {
+					        "body": "Hello, world!"
+					    }
+					}`),
 			method: http.MethodPost,
 			body:   "",
 			url:    "/",
@@ -127,6 +129,40 @@ func TestGenerateHandler(t *testing.T) {
 			},
 			wantStatus: http.StatusOK,
 			wantBody:   "Hello, world!",
+		},
+		{
+			name: "Successful POST request with linked file",
+			mock: mock(t, `
+				{
+				"request" : {
+					"url" : "/v1/hello",
+					"method" : "POST"
+				},
+				"response" : {
+					"status" : 200,
+					"bodyFileName" : "response_1.json",
+					"headers" : {
+					"Content-Type" : "application/json"
+					}
+				},
+				"persistent" : true
+				}`),
+			method: http.MethodPost,
+			body:   "",
+			url:    "/v1/hello",
+			files: map[string]string{
+				"response_1.json": `
+				{
+					\"Id\": \"001\",
+					\"message\": \"hello\"
+				}`,
+			},
+			wantStatus: http.StatusOK,
+			wantBody: `
+				{
+					\"Id\": \"001\",
+					\"message\": \"hello\"
+				}`,
 		},
 	}
 	logConfig := LogConfig{
@@ -156,6 +192,7 @@ func TestGenerateHandler(t *testing.T) {
 			case http.MethodGet, http.MethodDelete:
 				resp, err := http.Get(url)
 				checkReponse(resp, &tt, t, err)
+				defer resp.Body.Close()
 			case http.MethodPost, http.MethodPut:
 				req, err := http.NewRequest(tt.method, url, reqBody)
 				if err != nil {
@@ -171,6 +208,7 @@ func TestGenerateHandler(t *testing.T) {
 					})
 				}
 				resp, err := http.DefaultClient.Do(req)
+				checkReponse(resp, &tt, t, err)
 				if err != nil {
 					t.Fatalf("Failed to send request: %v", err)
 				}
@@ -182,18 +220,15 @@ func TestGenerateHandler(t *testing.T) {
 
 func checkReponse(resp *http.Response, tt *TestTask, t *testing.T, err error) {
 	// Проверяем статус код.
-	if resp.StatusCode != tt.wantStatus {
-		t.Errorf("Expected status %v, got %v", tt.wantStatus, resp.StatusCode)
-	}
+	require.Equal(t, tt.wantStatus, resp.StatusCode)
 	// Проверяем тело ответа.
 	body := make([]byte, len(tt.wantBody))
 	_, err = resp.Body.Read(body)
 	if err != nil && err.Error() != "EOF" {
 		t.Fatalf("Failed to read response body: %v", err)
 	}
-	if string(body) != tt.wantBody {
-		t.Errorf("Expected body %q, got %q", tt.wantBody, string(body))
-	}
+	bodyStr := string(body)
+	require.Equal(t, tt.wantBody, bodyStr)
 }
 
 func removeQueryParamsSimple(rawURL string) string {
