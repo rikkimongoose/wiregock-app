@@ -87,10 +87,10 @@ func main() {
 
 	mustacheService := MustacheService{dataLoader, log}
 	handlers := []HandlerFactory{
-		MocksHandler{mocks, dataLoader, mustacheService, MocksHandlerConfig{config.Server.MultipartBuffSizeBytes}, log},
-		MocksInfoHandler{mocks},
-		HealthcheckHandler{"OK"},
-		ActuatorHandler{config.Server.Port},
+		&MocksHandler{mocks, dataLoader, mustacheService, MocksHandlerConfig{config.Server.MultipartBuffSizeBytes}, log},
+		&MocksInfoHandler{mocks},
+		&HealthcheckHandler{"OK"},
+		&ActuatorHandler{config.Server.Port},
 	}
 	for _, handler := range handlers {
 		server.Install(handler)
@@ -120,10 +120,10 @@ func main() {
 						server.Stop()
 						mocks := append(mocksMongo, loadMockItems(fileMocksLoader)...)
 						handlers := []HandlerFactory{
-							MocksHandler{mocks, dataLoader, mustacheService, MocksHandlerConfig{config.Server.MultipartBuffSizeBytes}, log},
-							MocksInfoHandler{mocks},
-							HealthcheckHandler{"OK"},
-							ActuatorHandler{config.Server.Port},
+							&MocksHandler{mocks, dataLoader, mustacheService, MocksHandlerConfig{config.Server.MultipartBuffSizeBytes}, log},
+							&MocksInfoHandler{mocks},
+							&HealthcheckHandler{"OK"},
+							&ActuatorHandler{config.Server.Port},
 						}
 						for _, handler := range handlers {
 							server.Install(handler)

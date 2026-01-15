@@ -43,13 +43,13 @@ func ParseCondition(request *MockRequest, context *DataContext) (*ParsedConditio
 			if err != nil {
 				return nil, err
 			}
-			conditions = append(conditions, *newCondition)
+			conditions = append(conditions, newCondition)
 			if isMulti(&value) {
 				newConditionMulti, err := createConditionMulti(&value, func() []string { return context.GetMulti(key) })
 				if err != nil {
 					return nil, err
 				}
-				conditions = append(conditions, *newConditionMulti)
+				conditions = append(conditions, newConditionMulti)
 			}
 		}
 	}
@@ -60,13 +60,13 @@ func ParseCondition(request *MockRequest, context *DataContext) (*ParsedConditio
 			if err != nil {
 				return nil, err
 			}
-			conditions = append(conditions, *newCondition)
+			conditions = append(conditions, newCondition)
 			if isMulti(&value) {
 				newConditionMulti, err := createConditionMulti(&value, func() []string { return context.ParamsMulti(key) })
 				if err != nil {
 					return nil, err
 				}
-				conditions = append(conditions, *newConditionMulti)
+				conditions = append(conditions, newConditionMulti)
 			}
 		}
 	}
@@ -77,7 +77,7 @@ func ParseCondition(request *MockRequest, context *DataContext) (*ParsedConditio
 			if err != nil {
 				return nil, err
 			}
-			conditions = append(conditions, *newCondition)
+			conditions = append(conditions, newCondition)
 		}
 	}
 
@@ -87,7 +87,7 @@ func ParseCondition(request *MockRequest, context *DataContext) (*ParsedConditio
 			if err != nil {
 				return nil, err
 			}
-			conditions = append(conditions, *newCondition)
+			conditions = append(conditions, newCondition)
 		}
 	}
 
@@ -99,7 +99,7 @@ func ParseCondition(request *MockRequest, context *DataContext) (*ParsedConditio
 			if err != nil {
 				return nil, err
 			}
-			conditions = append(conditions, *newCondition)
+			conditions = append(conditions, newCondition)
 		}
 	}
 
@@ -109,13 +109,13 @@ func ParseCondition(request *MockRequest, context *DataContext) (*ParsedConditio
 			if err != nil {
 				return nil, err
 			}
-			conditions = append(conditions, *newCondition)
+			conditions = append(conditions, newCondition)
 		}
 	}
 
 	return &ParsedConditions{
 		IsMultipart: isMultipart,
-		Condition:   AndCondition{conditions},
+		Condition:   &AndCondition{conditions},
 	}, nil
 }
 
@@ -145,7 +145,7 @@ func createMultipartFileCondition(multipartPatternsData *MultipartPatternsData, 
 	if multipartPatternsData.MatchingType != nil {
 		checkAny = strings.Compare(*multipartPatternsData.MatchingType, "ALL") == 0
 	}
-	var ruleBody BlockRule
+	var ruleBody *BlockRule
 	if multipartPatternsData.BodyPatterns != nil {
 		bodyPatternRules := []Rule{}
 		for _, bodyPatterns := range multipartPatternsData.BodyPatterns {
@@ -156,9 +156,9 @@ func createMultipartFileCondition(multipartPatternsData *MultipartPatternsData, 
 			bodyPatternRules = append(bodyPatternRules, ruleBodyItem)
 		}
 		if checkAny {
-			ruleBody = BlockRule{rulesAnd: []Rule{}, rulesOr: bodyPatternRules}
+			ruleBody = &BlockRule{rulesAnd: []Rule{}, rulesOr: bodyPatternRules}
 		} else {
-			ruleBody = BlockRule{rulesAnd: bodyPatternRules, rulesOr: []Rule{}}
+			ruleBody = &BlockRule{rulesAnd: bodyPatternRules, rulesOr: []Rule{}}
 		}
 	}
 	var rulesFileName Rule
@@ -246,17 +246,17 @@ func loadXPathFilterProps(filter *XPathFilter, xPathFilterPropsDefault *XPathFil
 func loadXPathFilterRules(filterPath *XPathFilter, caseInsensitive bool) []Rule {
 	xPathRules := []Rule{}
 	if filterPath.EqualTo != nil {
-		xPathRules = append(xPathRules, EqualToRule{*filterPath.EqualTo, caseInsensitive})
+		xPathRules = append(xPathRules, &EqualToRule{*filterPath.EqualTo, caseInsensitive})
 	}
 	if filterPath.Contains != nil {
-		xPathRules = append(xPathRules, ContainsRule{*filterPath.Contains, caseInsensitive})
+		xPathRules = append(xPathRules, &ContainsRule{*filterPath.Contains, caseInsensitive})
 	}
 	actualFormat := time.RFC3339
 	if filterPath.Before != nil || filterPath.After != nil || filterPath.EqualToDateTime != nil {
 		if filterPath.ActualFormat != nil {
 			actualFormat = *filterPath.ActualFormat
 		}
-		xPathRules = append(xPathRules, DateTimeRule{filterPath.Before, filterPath.After, filterPath.EqualToDateTime, actualFormat})
+		xPathRules = append(xPathRules, &DateTimeRule{filterPath.Before, filterPath.After, filterPath.EqualToDateTime, actualFormat})
 	}
 	return xPathRules
 }
@@ -268,12 +268,12 @@ type XPathFactory interface {
 
 type XPathJsonFactory struct{}
 
-func (xPathFactory XPathJsonFactory) generateEqualsRule(query string, xPathFilterProps *XPathFilterProps) (Rule, error) {
+func (xPathFactory *XPathJsonFactory) generateEqualsRule(query string, xPathFilterProps *XPathFilterProps) (Rule, error) {
 	node, err := jsonquery.Parse(strings.NewReader(query))
 	if err != nil {
 		return nil, err
 	}
-	rule := EqualToJsonRule{node: node, EqualToBaseRule: parseEqualToBaseRule(xPathFilterProps)}
+	rule := &EqualToJsonRule{node: node, EqualToBaseRule: parseEqualToBaseRule(xPathFilterProps)}
 	return rule, err
 }
 
@@ -284,7 +284,7 @@ func parseEqualToBaseRule(xPathFilterProps *XPathFilterProps) EqualToBaseRule {
 	}
 }
 
-func (xPathFactory XPathJsonFactory) generateMatchesXPathRule(filterPath *XPathFilter, xPathFilterPropsDefault *XPathFilterProps) (Rule, error) {
+func (xPathFactory *XPathJsonFactory) generateMatchesXPathRule(filterPath *XPathFilter, xPathFilterPropsDefault *XPathFilterProps) (Rule, error) {
 	xPathFilterPropsLocal := loadXPathFilterProps(filterPath, xPathFilterPropsDefault)
 	xPathRules := loadXPathFilterRules(filterPath, xPathFilterPropsLocal.caseInsensitive)
 	if filterPath.EqualToJson != nil {
@@ -308,25 +308,25 @@ func (xPathFactory XPathJsonFactory) generateMatchesXPathRule(filterPath *XPathF
 		}
 		xPathRules = append(xPathRules, ruleSub)
 	}
-	rule := MatchesJsonPathRule{
+	rule := &MatchesJsonPathRule{
 		path:      filterPath.Expression,
-		innerRule: BlockRule{rulesOr: xPathRules},
+		innerRule: &BlockRule{rulesOr: xPathRules},
 	}
 	return rule, nil
 }
 
 type XPathXmlFactory struct{}
 
-func (xPathFactory XPathXmlFactory) generateEqualsRule(query string, xPathFilterProps *XPathFilterProps) (Rule, error) {
+func (xPathFactory *XPathXmlFactory) generateEqualsRule(query string, xPathFilterProps *XPathFilterProps) (Rule, error) {
 	node, err := xmlquery.Parse(strings.NewReader(query))
 	if err != nil {
 		return nil, err
 	}
-	rule := EqualToXmlRule{node: node, EqualToBaseRule: parseEqualToBaseRule(xPathFilterProps)}
+	rule := &EqualToXmlRule{node: node, EqualToBaseRule: parseEqualToBaseRule(xPathFilterProps)}
 	return rule, err
 }
 
-func (xPathFactory XPathXmlFactory) generateMatchesXPathRule(filterPath *XPathFilter, xPathFilterPropsDefault *XPathFilterProps) (Rule, error) {
+func (xPathFactory *XPathXmlFactory) generateMatchesXPathRule(filterPath *XPathFilter, xPathFilterPropsDefault *XPathFilterProps) (Rule, error) {
 	xPath, err := generateXPath(filterPath.Expression, filterPath.XPathNamespaces)
 	if err != nil {
 		return nil, err
@@ -354,9 +354,9 @@ func (xPathFactory XPathXmlFactory) generateMatchesXPathRule(filterPath *XPathFi
 		}
 		xPathRules = append(xPathRules, ruleSub)
 	}
-	rule := MatchesXmlXPathRule{
+	rule := &MatchesXmlXPathRule{
 		xPath:     xPath,
-		innerRule: BlockRule{rulesOr: xPathRules},
+		innerRule: &BlockRule{rulesOr: xPathRules},
 	}
 	return rule, nil
 }
@@ -405,22 +405,22 @@ func parseRule(filter *Filter) ([]Rule, error) {
 
 	if filter.Contains != nil {
 		val := *filter.Contains
-		rules = append(rules, ContainsRule{val, caseInsensitive})
+		rules = append(rules, &ContainsRule{val, caseInsensitive})
 	}
 
 	if filter.EqualTo != nil {
 		val := *filter.EqualTo
-		rules = append(rules, EqualToRule{val, caseInsensitive})
+		rules = append(rules, &EqualToRule{val, caseInsensitive})
 	}
 
 	if filter.BinaryEqualTo != nil {
 		val := *filter.BinaryEqualTo
-		rules = append(rules, EqualToBinaryRule{[]byte(val)})
+		rules = append(rules, &EqualToBinaryRule{[]byte(val)})
 	}
 
 	if filter.DoesNotContain != nil {
 		val := *filter.DoesNotContain
-		rules = append(rules, NotRule{ContainsRule{val, caseInsensitive}})
+		rules = append(rules, &NotRule{&ContainsRule{val, caseInsensitive}})
 	}
 
 	if filter.Matches != nil {
@@ -429,7 +429,7 @@ func parseRule(filter *Filter) ([]Rule, error) {
 		if err != nil {
 			return nil, err
 		}
-		rules = append(rules, RegExRule{regex})
+		rules = append(rules, &RegExRule{regex})
 	}
 
 	if filter.DoesNotMatch != nil {
@@ -438,13 +438,13 @@ func parseRule(filter *Filter) ([]Rule, error) {
 		if err != nil {
 			return nil, err
 		}
-		rules = append(rules, NotRule{RegExRule{regex}})
+		rules = append(rules, &NotRule{&RegExRule{regex}})
 	}
 
 	if filter.Absent != nil {
 		absent := *filter.Absent
 		if absent {
-			rules = append(rules, AbsentRule{})
+			rules = append(rules, &AbsentRule{})
 		}
 	}
 
@@ -453,7 +453,7 @@ func parseRule(filter *Filter) ([]Rule, error) {
 		actualFormat = *filter.ActualFormat
 	}
 	if filter.Before != nil || filter.After != nil || filter.EqualToDateTime != nil {
-		rules = append(rules, DateTimeRule{filter.Before, filter.After, filter.EqualToDateTime, actualFormat})
+		rules = append(rules, &DateTimeRule{filter.Before, filter.After, filter.EqualToDateTime, actualFormat})
 	}
 
 	if filter.EqualToJson != nil {
@@ -489,7 +489,7 @@ func parseRule(filter *Filter) ([]Rule, error) {
 
 	if filter.MatchesJsonSchema != nil {
 		val := *filter.MatchesJsonSchema
-		rules = append(rules, MatchesJsonSchemaRule{val})
+		rules = append(rules, &MatchesJsonSchemaRule{val})
 	}
 
 	return rules, nil
@@ -527,17 +527,17 @@ func parseRuleMulti(filter *MultiFilter) ([]Rule, error) {
 	}
 	if filter.Contains != nil {
 		val := *filter.Contains
-		rules = append(rules, ContainsRule{val, caseInsensitive})
+		rules = append(rules, &ContainsRule{val, caseInsensitive})
 	}
 
 	if filter.EqualTo != nil {
 		val := *filter.EqualTo
-		rules = append(rules, EqualToRule{val, caseInsensitive})
+		rules = append(rules, &EqualToRule{val, caseInsensitive})
 	}
 
 	if filter.DoesNotContain != nil {
 		val := *filter.DoesNotContain
-		rules = append(rules, NotRule{ContainsRule{val, caseInsensitive}})
+		rules = append(rules, &NotRule{&ContainsRule{val, caseInsensitive}})
 	}
 	return rules, nil
 }

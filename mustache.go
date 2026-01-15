@@ -12,7 +12,7 @@ type MustacheService struct {
 	log        *zap.Logger
 }
 
-func (service MustacheService) replace(w http.ResponseWriter, body string, context ...interface{}) string {
+func (service *MustacheService) replace(w http.ResponseWriter, body string, context ...interface{}) string {
 	result, err := mustache.Render(body, context)
 	if err != nil {
 		service.log.Error("Implementing template data to responseBody", zap.Error(err))
@@ -32,7 +32,7 @@ func (service MustacheService) replace(w http.ResponseWriter, body string, conte
 	return result
 }
 
-func (service MustacheService) updateDataInFiles(dataMap map[string]string, context ...interface{}) map[string]string {
+func (service *MustacheService) updateDataInFiles(dataMap map[string]string, context ...interface{}) map[string]string {
 	resultMap := make(map[string]string)
 	for fileName, fileSource := range dataMap {
 		result, err := mustache.Render(fileSource, context)

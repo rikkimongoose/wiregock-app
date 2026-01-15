@@ -37,12 +37,12 @@ type HandlerFactory interface {
 	Install(router *mux.Router)
 }
 
-func (server WiregockServer) Install(handlerFactory HandlerFactory) WiregockServer {
+func (server *WiregockServer) Install(handlerFactory HandlerFactory) *WiregockServer {
 	handlerFactory.Install(server.router)
 	return server
 }
 
-func (server WiregockServer) Start() {
+func (server *WiregockServer) Start() {
 	serverAddr := fmt.Sprintf("%s:%d", server.config.Host, server.config.Port)
 	server.srv = &http.Server{
 		Handler: server.router,
@@ -90,7 +90,7 @@ func (server WiregockServer) Start() {
 	}
 }
 
-func (server WiregockServer) Stop() {
+func (server *WiregockServer) Stop() {
 	servers := []*http.Server{server.srv, server.srvHttps}
 	fmt.Println("Shutting down servers...")
 
@@ -110,7 +110,7 @@ type ActuatorHandler struct {
 	Port int
 }
 
-func (handler ActuatorHandler) Install(router *mux.Router) {
+func (handler *ActuatorHandler) Install(router *mux.Router) {
 	actuatorConfig := &actuator.Config{
 		Endpoints: []int{
 			actuator.Env,
@@ -132,7 +132,7 @@ type HealthcheckHandler struct {
 	Response string
 }
 
-func (handler HealthcheckHandler) Install(router *mux.Router) {
+func (handler *HealthcheckHandler) Install(router *mux.Router) {
 	router.HandleFunc("/healthcheck", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(handler.Response))
 	}).Methods("GET", "HEAD")
@@ -142,7 +142,7 @@ type MocksInfoHandler struct {
 	mocks []MockData
 }
 
-func (handler MocksInfoHandler) Install(router *mux.Router) {
+func (handler *MocksInfoHandler) Install(router *mux.Router) {
 	router.HandleFunc("/mocks", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(handler.mocks)
 	}).Methods("GET")
@@ -160,28 +160,37 @@ type MocksHandlerConfig struct {
 	MultipartBuffSizeBytes int64
 }
 
-func (mocksHandler MocksHandler) Install(router *mux.Router) {
+func (mocksHandler *MocksHandler) Install(router *mux.Router) {
 	for _, mock := range mocksHandler.mocks {
-		methods := LoadMethods(*mock.Request.Method)
-		if len(methods) == 0 {
-			mocksHandler.log.Warn(`No method defined for mock. Default method GET is used`)
-			methods = []string{"GET"}
-		}
-		handler := mocksHandler.GenerateHandler(&mock)
-		if mock.Request.BasicAuthCredentials != nil && mock.Request.BasicAuthCredentials.Username != nil && mock.Request.BasicAuthCredentials.Password != nil {
-			handler = mocksHandler.basicAuth(BasicAuthConfig{handler, *mock.Request.BasicAuthCredentials.Username, *mock.Request.BasicAuthCredentials.Password})
-		}
-		var url string
-		if mock.Request.UrlPath != nil {
-			url = *mock.Request.UrlPath
-		} else if mock.Request.UrlPattern != nil {
-			url = *mock.Request.UrlPattern
-		} else {
-			mocksHandler.log.Warn(`No url defined for mock. Default url is used`)
-			url = "/"
-		}
-		router.PathPrefix(url).Handler(handler).Methods(methods...)
+		mocksHandler.InstallMockToRouter(router, &mock)
 	}
+}
+
+func (mocksHandler *MocksHandler) InstallMock(mock *MockData) (string, http.HandlerFunc, []string) {
+	methods := LoadMethods(*mock.Request.Method)
+	if len(methods) == 0 {
+		mocksHandler.log.Warn(`No method defined for mock. Default method GET is used`)
+		methods = []string{"GET"}
+	}
+	handler := mocksHandler.GenerateHandler(mock)
+	if mock.Request.BasicAuthCredentials != nil && mock.Request.BasicAuthCredentials.Username != nil && mock.Request.BasicAuthCredentials.Password != nil {
+		handler = mocksHandler.basicAuth(BasicAuthConfig{handler, *mock.Request.BasicAuthCredentials.Username, *mock.Request.BasicAuthCredentials.Password})
+	}
+	var url string
+	if mock.Request.UrlPath != nil {
+		url = *mock.Request.UrlPath
+	} else if mock.Request.UrlPattern != nil {
+		url = *mock.Request.UrlPattern
+	} else {
+		mocksHandler.log.Warn(`No url defined for mock. Default url is used`)
+		url = "/"
+	}
+	return url, handler, methods
+}
+
+func (mocksHandler *MocksHandler) InstallMockToRouter(router *mux.Router, mock *MockData) {
+	url, handler, methods := mocksHandler.InstallMock(mock)
+	router.PathPrefix(url).Handler(handler).Methods(methods...)
 }
 
 type BasicAuthConfig struct {
@@ -190,7 +199,7 @@ type BasicAuthConfig struct {
 	password string
 }
 
-func (mocksHandler MocksHandler) basicAuth(config BasicAuthConfig) http.HandlerFunc {
+func (mocksHandler *MocksHandler) basicAuth(config BasicAuthConfig) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Extract the username and password from the request
 		// Authorization header. If no Authentication header is present
@@ -233,7 +242,7 @@ func (mocksHandler MocksHandler) basicAuth(config BasicAuthConfig) http.HandlerF
 	})
 }
 
-func (mocksHandler MocksHandler) GenerateHandler(mock *MockData) http.HandlerFunc {
+func (mocksHandler *MocksHandler) GenerateHandler(mock *MockData) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		multipartFiles := []FileFormData{}
 		dc := DataContext{
@@ -370,7 +379,7 @@ func (mocksHandler MocksHandler) GenerateHandler(mock *MockData) http.HandlerFun
 	}
 }
 
-func (mocksHandler MocksHandler) loadMultipartFiles(req *http.Request) ([]FileFormData, error) {
+func (mocksHandler *MocksHandler) loadMultipartFiles(req *http.Request) ([]FileFormData, error) {
 	if req.MultipartForm == nil {
 		err := req.ParseMultipartForm(mocksHandler.config.MultipartBuffSizeBytes)
 		if err != nil {

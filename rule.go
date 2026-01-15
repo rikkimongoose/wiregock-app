@@ -97,23 +97,23 @@ type BlockRule struct {
 	rulesOr  []Rule
 }
 
-func (rule NotRule) check(str string) (bool, error) {
+func (rule *NotRule) check(str string) (bool, error) {
 	res, err := rule.base.check(str)
 	return !res, err
 }
 
-func (rule EqualToRule) check(str string) (bool, error) {
+func (rule *EqualToRule) check(str string) (bool, error) {
 	if rule.caseInsensitive {
 		return strings.EqualFold(rule.val, str), nil
 	}
 	return strings.Compare(rule.val, str) == 0, nil
 }
 
-func (rule EqualToBinaryRule) check(str string) (bool, error) {
+func (rule *EqualToBinaryRule) check(str string) (bool, error) {
 	return bytes.Equal(rule.val, []byte(str)), nil
 }
 
-func (rule DateTimeRule) check(str string) (bool, error) {
+func (rule *DateTimeRule) check(str string) (bool, error) {
 	sourceTime, error := time.Parse(rule.timeFormat, str)
 	if error != nil {
 		return false, error
@@ -130,25 +130,25 @@ func (rule DateTimeRule) check(str string) (bool, error) {
 	return true, nil
 }
 
-func (rule ContainsRule) check(str string) (bool, error) {
+func (rule *ContainsRule) check(str string) (bool, error) {
 	if rule.caseInsensitive {
 		return strings.Contains(strings.ToLower(str), strings.ToLower(rule.val)), nil
 	}
 	return strings.Contains(str, rule.val), nil
 }
 
-func (rule WildcardsRule) check(str string) (bool, error) {
+func (rule *WildcardsRule) check(str string) (bool, error) {
 	if rule.caseInsensitive {
 		return wildcard.Match(strings.ToLower(rule.val), strings.ToLower(str)), nil
 	}
 	return wildcard.Match(rule.val, str), nil
 }
 
-func (rule RegExRule) check(str string) (bool, error) {
+func (rule *RegExRule) check(str string) (bool, error) {
 	return rule.regex.MatchString(str), nil
 }
 
-func (rule EqualToXmlRule) check(str string) (bool, error) {
+func (rule *EqualToXmlRule) check(str string) (bool, error) {
 	node, err := xmlquery.Parse(strings.NewReader(str))
 	if err != nil {
 		return false, err
@@ -156,7 +156,7 @@ func (rule EqualToXmlRule) check(str string) (bool, error) {
 	return reflect.DeepEqual(*rule.node, *node), nil
 }
 
-func (rule EqualToJsonRule) check(str string) (bool, error) {
+func (rule *EqualToJsonRule) check(str string) (bool, error) {
 	node, err := jsonquery.Parse(strings.NewReader(str))
 	if err != nil {
 		return false, err
@@ -164,7 +164,7 @@ func (rule EqualToJsonRule) check(str string) (bool, error) {
 	return reflect.DeepEqual(*rule.node, *node), nil
 }
 
-func (rule MatchesXmlXPathRule) check(str string) (bool, error) {
+func (rule *MatchesXmlXPathRule) check(str string) (bool, error) {
 	nodeBase, err := xmlquery.Parse(strings.NewReader(str))
 	if err != nil {
 		return false, err
@@ -185,7 +185,7 @@ func (rule MatchesXmlXPathRule) check(str string) (bool, error) {
 	return (xmlquery.QuerySelector(nodeBase, rule.xPath) != nil), nil
 }
 
-func (rule MatchesJsonPathRule) check(str string) (bool, error) {
+func (rule *MatchesJsonPathRule) check(str string) (bool, error) {
 	v := interface{}(nil)
 	json.Unmarshal([]byte(str), &v)
 	result, err := jsonpath.Get(rule.path, v)
@@ -235,7 +235,7 @@ func ToArrayGeneric[T any](input any) ([]T, error) {
 	return result, nil
 }
 
-func (rule MatchesJsonSchemaRule) check(str string) (bool, error) {
+func (rule *MatchesJsonSchemaRule) check(str string) (bool, error) {
 	schemaLoader := gojsonschema.NewStringLoader(rule.schema)
 	documentLoader := gojsonschema.NewStringLoader(str)
 	result, err := gojsonschema.Validate(schemaLoader, documentLoader)
@@ -252,19 +252,19 @@ func (rule MatchesJsonSchemaRule) check(str string) (bool, error) {
 	return false, errors.Join(errs...)
 }
 
-func (rule AbsentRule) check(str string) (bool, error) {
+func (rule *AbsentRule) check(str string) (bool, error) {
 	return len(str) == 0, nil
 }
 
-func (rule TrueRule) check(str string) (bool, error) {
+func (rule *TrueRule) check(str string) (bool, error) {
 	return true, nil
 }
 
-func (rule FalseRule) check(str string) (bool, error) {
+func (rule *FalseRule) check(str string) (bool, error) {
 	return false, nil
 }
 
-func (rule BlockRule) check(str string) (bool, error) {
+func (rule *BlockRule) check(str string) (bool, error) {
 	if rule.rulesAnd != nil {
 		for _, ruleAnd := range rule.rulesAnd {
 			res, err := ruleAnd.check(str)

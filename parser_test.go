@@ -94,21 +94,21 @@ func TestParseRule(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`Wrong example of Xml XPath: %s`, err)
 	}
-	emptyBlockRule := BlockRule{rulesOr: []Rule{}}
+	emptyBlockRule := &BlockRule{rulesOr: []Rule{}}
 	rulesChecker := RulesChecker{rules, t}
 	rulesToCheck := map[string]Rule{
-		"ContainsRule":          ContainsRule{Contains, CaseInsensitive},
-		"EqualToRule":           EqualToRule{EqualTo, CaseInsensitive},
-		"EqualToBinaryRule":     EqualToBinaryRule{[]byte(BinaryEqualTo)},
-		"NotRule.ContainsRule":  NotRule{ContainsRule{DoesNotContain, CaseInsensitive}},
-		"RegExRule":             RegExRule{regexp.MustCompile(Matches)},
-		"NotRule.RegExRule":     NotRule{RegExRule{regexp.MustCompile(Matches)}},
-		"AbsentRule":            AbsentRule{},
-		"DateTimeRule":          DateTimeRule{&Before, &After, &EqualToDateTime, ActualFormat},
-		"EqualToJsonRule":       EqualToJsonRule{node: equalToJsonNode, EqualToBaseRule: equalToBaseRule},
-		"EqualToXmlRule":        EqualToXmlRule{node: equalToXmlNode, EqualToBaseRule: equalToBaseRule},
-		"EqualToJsonSchemaRule": MatchesJsonSchemaRule{MatchesJsonSchema},
-		"MatchesJsonPathRule":   MatchesJsonPathRule{path: MatchesJsonPath, innerRule: emptyBlockRule},
+		"ContainsRule":          &ContainsRule{Contains, CaseInsensitive},
+		"EqualToRule":           &EqualToRule{EqualTo, CaseInsensitive},
+		"EqualToBinaryRule":     &EqualToBinaryRule{[]byte(BinaryEqualTo)},
+		"NotRule.ContainsRule":  &NotRule{&ContainsRule{DoesNotContain, CaseInsensitive}},
+		"RegExRule":             &RegExRule{regexp.MustCompile(Matches)},
+		"NotRule.RegExRule":     &NotRule{&RegExRule{regexp.MustCompile(Matches)}},
+		"AbsentRule":            &AbsentRule{},
+		"DateTimeRule":          &DateTimeRule{&Before, &After, &EqualToDateTime, ActualFormat},
+		"EqualToJsonRule":       &EqualToJsonRule{node: equalToJsonNode, EqualToBaseRule: equalToBaseRule},
+		"EqualToXmlRule":        &EqualToXmlRule{node: equalToXmlNode, EqualToBaseRule: equalToBaseRule},
+		"EqualToJsonSchemaRule": &MatchesJsonSchemaRule{MatchesJsonSchema},
+		"MatchesJsonPathRule":   &MatchesJsonPathRule{path: MatchesJsonPath, innerRule: emptyBlockRule},
 	}
 	for key, rule := range rulesToCheck {
 		rulesChecker.checkRule(rule, key)
@@ -120,7 +120,7 @@ type RulesChecker struct {
 	t     *testing.T
 }
 
-func (rulesChecker RulesChecker) checkRule(ruleToCheck Rule, ruleTitle string) {
+func (rulesChecker *RulesChecker) checkRule(ruleToCheck Rule, ruleTitle string) {
 	for _, rule := range rulesChecker.rules {
 		if reflect.DeepEqual(rule, ruleToCheck) {
 			return

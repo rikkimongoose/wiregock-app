@@ -119,7 +119,7 @@ type FileDataCondition struct {
 	rulesBody     Rule
 }
 
-func (c DataCondition) Check() (bool, error) {
+func (c *DataCondition) Check() (bool, error) {
 	data := ""
 	if c.loaderMethod != nil {
 		data = c.loaderMethod()
@@ -127,7 +127,7 @@ func (c DataCondition) Check() (bool, error) {
 	return c.blockRule.check(data)
 }
 
-func (c MultiDataCondition) Check() (bool, error) {
+func (c *MultiDataCondition) Check() (bool, error) {
 	var datas []string
 	if c.loaderMethod == nil {
 		datas = []string{""}
@@ -162,7 +162,7 @@ func (c MultiDataCondition) Check() (bool, error) {
 	return resultAnd && resultOr, nil
 }
 
-func (c FileDataCondition) Check() (bool, error) {
+func (c *FileDataCondition) Check() (bool, error) {
 	hasRules := c.rulesBody != nil || len(c.rulesHeader) > 0
 	if c.loaderMethod == nil {
 		return hasRules, nil
@@ -210,7 +210,7 @@ type AndCondition struct {
 	conditions []Condition
 }
 
-func (c AndCondition) Check() (bool, error) {
+func (c *AndCondition) Check() (bool, error) {
 	for _, cond := range c.conditions {
 		res, err := cond.Check()
 		if err != nil {
@@ -227,7 +227,7 @@ type OrCondition struct {
 	conditions []Condition
 }
 
-func (c OrCondition) Check() (bool, error) {
+func (c *OrCondition) Check() (bool, error) {
 	for _, cond := range c.conditions {
 		res, err := cond.Check()
 		if err != nil {

@@ -24,7 +24,7 @@ type MongoMocksLoader struct {
 	log    *zap.Logger
 }
 
-func (loader MongoMocksLoader) mongoTlsConfig(mongoTlsConfig MongoTlsConfig) *tls.Config {
+func (loader *MongoMocksLoader) mongoTlsConfig(mongoTlsConfig MongoTlsConfig) *tls.Config {
 	caCertPool := x509.NewCertPool()
 	requiredParams := []string{mongoTlsConfig.caFile, mongoTlsConfig.certFile, mongoTlsConfig.keyFile}
 	for _, param := range requiredParams {
@@ -59,7 +59,7 @@ func (loader MongoMocksLoader) mongoTlsConfig(mongoTlsConfig MongoTlsConfig) *tl
 	}
 }
 
-func (loader MongoMocksLoader) Load() []MockRoute {
+func (loader *MongoMocksLoader) Load() []MockRoute {
 	var mockRoutes []MockRoute
 	if loader.config == nil {
 		return mockRoutes
@@ -102,7 +102,7 @@ type MongoMockRoute struct {
 	mockSource string
 }
 
-func (loader MongoMocksLoader) convertToMockRoute(mongoMockRoute MongoMockRoute) *MockRoute {
+func (loader *MongoMocksLoader) convertToMockRoute(mongoMockRoute MongoMockRoute) *MockRoute {
 	var mocks []MockData
 	wiregockCollection := mongoMockRoute.client.Database(mongoMockRoute.db).Collection(mongoMockRoute.mockSource)
 	cursor, err := wiregockCollection.Find(*mongoMockRoute.ctx, bson.M{})
