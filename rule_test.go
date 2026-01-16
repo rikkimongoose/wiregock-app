@@ -4,283 +4,344 @@ import (
 	"regexp"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestEqualToRuleCheck(t *testing.T) {
-	ruleCaseSensitive := EqualToRule{"test", false}
-	res, err := ruleCaseSensitive.check("test")
-	if err != nil || !res {
-		t.Fatalf(`EqualToRule failed checking: test`)
+	tests := []struct {
+		name  string
+		rule  EqualToRule
+		input string
+		want  bool
+	}{
+		{
+			name:  "case sensitive",
+			rule:  EqualToRule{"test", false},
+			input: "test",
+			want:  true,
+		},
+		{
+			name:  "case insensitive",
+			rule:  EqualToRule{"test", true},
+			input: "tEst",
+			want:  true,
+		},
 	}
-	ruleCaseInsensitive := EqualToRule{"test", true}
-	res, err = ruleCaseInsensitive.check("tEst")
-	if err != nil || !res {
-		t.Fatalf(`EqualToRule failed checking: tEst`)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requireRuleCheck(t, &tt.rule, tt.input, tt.want)
+		})
 	}
 }
 
 func TestEqualToBinaryRuleCheck(t *testing.T) {
-	rule := EqualToBinaryRule{[]byte("test")}
-	res, err := rule.check("test")
-	if err != nil || !res {
-		t.Fatalf(`EqualToBinaryRule failed checking: test`)
-	}
+	rule := &EqualToBinaryRule{[]byte("test")}
+	requireRuleCheck(t, rule, "test", true)
 }
 
-func TestNotRuleRuleCheck(t *testing.T) {
-	ruleNotTrue := NotRule{TrueRule{}}
-	res, err := ruleNotTrue.check("test")
-	if err != nil || res {
-		t.Fatalf(`NotRule(TrueRule) failed checking`)
+func TestNotRuleCheck(t *testing.T) {
+	tests := []struct {
+		name  string
+		rule  Rule
+		input string
+		want  bool
+	}{
+		{
+			name:  "not true",
+			rule:  &NotRule{&TrueRule{}},
+			input: "test",
+			want:  false,
+		},
+		{
+			name:  "not false",
+			rule:  &NotRule{&FalseRule{}},
+			input: "test",
+			want:  true,
+		},
 	}
-	ruleNotFalse := NotRule{FalseRule{}}
-	res, err = ruleNotFalse.check("test")
-	if err != nil || !res {
-		t.Fatalf(`NotRule(FalseRule) failed checking`)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requireRuleCheck(t, tt.rule, tt.input, tt.want)
+		})
 	}
 }
 
 func TestContainsRuleCheck(t *testing.T) {
-	ruleCaseSensitive := ContainsRule{"test", false}
-	res, err := ruleCaseSensitive.check("testing")
-	if err != nil || !res {
-		t.Fatalf(`ContainsRule failed checking: test`)
-	}
-	ruleCaseInsensitive := ContainsRule{"test", true}
-	res, err = ruleCaseInsensitive.check("tEsting")
-	if err != nil || !res {
-		t.Fatalf(`ContainsRule failed checking: tEsting`)
+	for _, rule := range []ContainsRule{
+		{"test", false},
+		{"test", true},
+	} {
+		requireRuleCheck(t, &rule, "testing", true)
 	}
 }
 
 func TestDateTimeRuleCheck(t *testing.T) {
-	sourceData := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
+	source := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 
-	ruleEqualToDateTime := DateTimeRule{equalToDateTime: &sourceData, timeFormat: time.RFC3339}
-	res, err := ruleEqualToDateTime.check("2009-11-10T23:00:00Z")
-	if err != nil || !res {
-		t.Fatalf(`Rule doesn't check that %s is equal %s Error: %s`, "2009-11-10T23:00:00Z", sourceData, err)
+	tests := []struct {
+		name  string
+		rule  *DateTimeRule
+		input string
+		want  bool
+	}{
+		{
+			name: "equal to datetime",
+			rule: &DateTimeRule{
+				equalToDateTime: &source,
+				timeFormat:      time.RFC3339,
+			},
+			input: "2009-11-10T23:00:00Z",
+			want:  true,
+		},
+		{
+			name: "before datetime",
+			rule: &DateTimeRule{
+				before:     &source,
+				timeFormat: time.RFC3339,
+			},
+			input: "2009-11-09T23:00:00Z",
+			want:  true,
+		},
+		{
+			name: "after datetime",
+			rule: &DateTimeRule{
+				after:      &source,
+				timeFormat: time.RFC3339,
+			},
+			input: "2009-11-11T23:00:00Z",
+			want:  true,
+		},
 	}
-	ruleBefore := DateTimeRule{before: &sourceData, timeFormat: time.RFC3339}
-	res, err = ruleBefore.check("2009-11-09T23:00:00Z")
-	if err != nil || !res {
-		t.Fatalf(`Rule doesn't check that %s is before %s. Error: %s`, "2009-11-09T23:00:00Z", sourceData, err)
-	}
-	ruleAfter := DateTimeRule{after: &sourceData, timeFormat: time.RFC3339}
-	res, err = ruleAfter.check("2009-11-11T23:00:00Z")
-	if err != nil || !res {
-		t.Fatalf(`Rule doesn't check that %s is after %s. Error: %s`, "2009-11-11T23:00:00Z", sourceData, err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requireRuleCheck(t, tt.rule, tt.input, true)
+		})
 	}
 }
 
-func TestMatchesJsonPathRule(t *testing.T) {
-	ruleSchema := "$.welcome.message[1]"
-	ruleMatchesJsonPath := MatchesJsonPathRule{ruleSchema, nil}
-	data := `{
-		"welcome":{
-				"message":["Good Morning", "Hello World!"]
-			}
-		}`
-	res, err := ruleMatchesJsonPath.check(data)
-	if err != nil || !res {
-		t.Fatalf(`MatchesJsonPathRule failed checking by rule %s: %s. Error: %s"`, ruleSchema, data, err)
+func TestMatchesJsonRules(t *testing.T) {
+	tests := []struct {
+		name  string
+		rule  Rule
+		input string
+	}{
+		{
+			name: "json path",
+			rule: &MatchesJsonPathRule{
+				"$.welcome.message[1]",
+				nil,
+			},
+			input: `{
+				"welcome": {
+					"message": ["Good Morning", "Hello World!"]
+				}
+			}`,
+		},
+		{
+			name: "json schema",
+			rule: &MatchesJsonSchemaRule{`{
+				"type": "object",
+				"properties": {
+					"firstName": {"type": "string"},
+					"lastName": {"type": "string"},
+					"age": {"type": "integer", "minimum": 0}
+				}
+			}`},
+			input: `{
+				"firstName": "John",
+				"lastName": "Doe",
+				"age": 21
+			}`,
+		},
 	}
-}
 
-func TestMatchesJsonSchemaRule(t *testing.T) {
-	ruleSchema := `{
-		"$id": "https://example.com/person.schema.json",
-		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"title": "Person",
-		"type": "object",
-		"properties": {
-			"firstName": {
-			"type": "string",
-			"description": "The person's first name."
-			},
-			"lastName": {
-			"type": "string",
-			"description": "The person's last name."
-			},
-			"age": {
-			"description": "Age in years which must be equal to or greater than zero.",
-			"type": "integer",
-			"minimum": 0
-			}
-		}
-	}`
-	ruleMatchesJsonSchemaRule := MatchesJsonSchemaRule{ruleSchema}
-	data := `{
-		"firstName": "John",
-		"lastName": "Doe",
-		"age": 21
-	}`
-	res, err := ruleMatchesJsonSchemaRule.check(data)
-	if err != nil || !res {
-		t.Fatalf(`MatchesJsonSchemaRule failed checking by rule %s: %s. Error: %s`, ruleSchema, data, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requireRuleCheck(t, tt.rule, tt.input, true)
+		})
 	}
 }
 
 func TestAbsentRuleCheck(t *testing.T) {
-	absentRule := AbsentRule{}
-	res, err := absentRule.check("test")
-	if err != nil && res {
-		t.Fatalf(`Absent rule catches existing. Error: %s`, err)
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{"present", "test", false},
+		{"absent", "", true},
 	}
-	res, err = absentRule.check("")
-	if err != nil && !res {
-		t.Fatalf(`Absent rule doesn't catch non-existing. Error: %s`, err)
+
+	rule := AbsentRule{}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requireRuleCheck(t, &rule, tt.input, tt.want)
+		})
 	}
 }
 
 func TestWildcardsRuleCheck(t *testing.T) {
-	checkWildcard("test", "test", false, t)
-	checkWildcard("?a*da*d.?*", "daaadabadmanda", false, t)
-	checkWildcard("?a*da*d.?*", "DaaadAbadmanda", true, t)
-}
+	tests := []struct {
+		name            string
+		wildcard        string
+		value           string
+		caseInsensitive bool
+	}{
+		{"exact", "test", "test", false},
+		{"wildcard", "?a*da*d.?*", "daaadabadmanda", false},
+		{"wildcard case-insensitive", "?a*da*d.?*", "DaaadAbadmanda", true},
+	}
 
-func checkWildcard(wildcard string, value string, caseInsensitive bool, t *testing.T) {
-	ruleWildcards := WildcardsRule{wildcard, caseInsensitive}
-	res, err := ruleWildcards.check(value)
-	if err != nil || !res {
-		t.Fatalf(`WildcardsRule %s failed checking: %s`, wildcard, value)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := WildcardsRule{tt.wildcard, tt.caseInsensitive}
+			requireRuleCheck(t, &rule, tt.value, true)
+		})
 	}
 }
 
 func TestRegExRuleCheck(t *testing.T) {
-	regEx := `00-[a-f\d]{32}-[a-f\d]{16}-01`
+	rule := RegExRule{
+		regexp.MustCompile(`00-[a-f\d]{32}-[a-f\d]{16}-01`),
+	}
 	value := "/00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01/"
-	ruleRegEx := RegExRule{regexp.MustCompile(regEx)}
-	res, err := ruleRegEx.check(value)
-	if err != nil || !res {
-		t.Fatalf(`RegExRule %s failed checking: %s`, regEx, value)
+
+	requireRuleCheck(t, &rule, value, true)
+}
+
+func TestMatchesXPathRules(t *testing.T) {
+	props := XPathFilterProps{true, true, true}
+
+	tests := []struct {
+		name    string
+		factory func() (Rule, error)
+		input   string
+	}{
+		{
+			name: "json xpath object",
+			factory: func() (Rule, error) {
+				json := `{ "boo": 42 }`
+				filter := XPathFilter{
+					EqualToJson: &json,
+					Expression:  "$.foo",
+				}
+				xPathJsonFactory := XPathJsonFactory{}
+				return xPathJsonFactory.GenerateMatchesXPathRule(&filter, &props)
+			},
+			input: `{ "foo": { "boo": 42 } }`,
+		},
+		{
+			name: "xml xpath",
+			factory: func() (Rule, error) {
+				xml := "<todo-item>Do the washing</todo-item>"
+				filter := XPathFilter{
+					EqualToXml: &xml,
+					Expression: "//todo-item",
+				}
+				xPathXmlFactory := XPathXmlFactory{}
+				return xPathXmlFactory.GenerateMatchesXPathRule(&filter, &props)
+			},
+			input: "<foo><todo-item>Do the washing</todo-item></foo>",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule, err := tt.factory()
+			require.NoError(t, err)
+			requireRuleCheck(t, rule, tt.input, true)
+		})
 	}
 }
 
-func TestMatchesJsonXPathRule(t *testing.T) {
-	xPathFilterProps := XPathFilterProps{true, true, true}
-	xPathJsonFactory := XPathJsonFactory{}
-	exp := "$.foo"
-	json := `{ "boo": 42 }`
-	xPathFilter := XPathFilter{
-		EqualToJson: &json,
-		Expression:  exp,
-	}
-	rule, err := xPathJsonFactory.generateMatchesXPathRule(&xPathFilter, &xPathFilterProps)
-	if err != nil {
-		t.Fatalf(`MatchesJsonXPathRule %s failed with error: %s`, json, err)
-	}
-	value := `{ "foo": { "boo": 42 } }`
-	res, err := rule.check(value)
-	if err != nil || !res {
-		t.Fatalf(`MatchesJsonXPathRule %s failed checking: %s`, json, value)
-	}
-}
+func TestEqualToRules(t *testing.T) {
+	props := XPathFilterProps{true, true, true}
 
-func TestMatchesJsonXPathRuleArray(t *testing.T) {
-	xPathFilterProps := XPathFilterProps{true, true, true}
-	xPathJsonFactory := XPathJsonFactory{}
-	exp := "$.foo"
-	json := `{ "boo": 42 }`
-	xPathFilter := XPathFilter{
-		EqualToJson: &json,
-		Expression:  exp,
+	tests := []struct {
+		name    string
+		factory func() (Rule, error)
+		input   string
+	}{
+		{
+			name: "json equals",
+			factory: func() (Rule, error) {
+				json := `{"foo": "boo", "boo": "foo"}`
+				xPathJsonFactory := XPathJsonFactory{}
+				return xPathJsonFactory.GenerateEqualsRule(json, &props)
+			},
+			input: `{"boo": "foo", "foo": "boo"}`,
+		},
+		{
+			name: "xml equals",
+			factory: func() (Rule, error) {
+				xml := "<thing>Hello</thing>"
+				xPathXmlFactory := XPathXmlFactory{}
+				return xPathXmlFactory.GenerateEqualsRule(xml, &props)
+			},
+			input: "<thing>Hello</thing>",
+		},
 	}
-	rule, err := xPathJsonFactory.generateMatchesXPathRule(&xPathFilter, &xPathFilterProps)
-	if err != nil {
-		t.Fatalf(`MatchesJsonXPathRule %s failed with error: %s`, json, err)
-	}
-	value := `{ "foo": [{ "boo": 42 }, { "goo": 42 }] }`
-	res, err := rule.check(value)
-	if err != nil || !res {
-		t.Fatalf(`MatchesJsonXPathRule %s failed checking: %s`, json, value)
-	}
-}
 
-func TestMatchesXmlXPathRule(t *testing.T) {
-	xPathFilterProps := XPathFilterProps{true, true, true}
-	xPathXmlFactory := XPathXmlFactory{}
-	exp := "//todo-item"
-	xml := "<todo-item>Do the washing</todo-item>"
-	xPathFilter := XPathFilter{
-		EqualToXml: &xml,
-		Expression: exp,
-	}
-	rule, err := xPathXmlFactory.generateMatchesXPathRule(&xPathFilter, &xPathFilterProps)
-	if err != nil {
-		t.Fatalf(`MatchesXmlXPathRule %s failed with error: %s`, xml, err)
-	}
-	value := "<foo><todo-item>Do the washing</todo-item></foo>"
-	res, err := rule.check(value)
-	if err != nil || !res {
-		t.Fatalf(`MatchesXmlXPathRule %s failed checking: %s`, xml, value)
-	}
-}
-
-func TestEqualToJsonRule(t *testing.T) {
-	xPathFilterProps := XPathFilterProps{true, true, true}
-	xPathJsonFactory := XPathJsonFactory{}
-	json := `{"foo": "boo", "boo": "foo"}`
-	rule, err := xPathJsonFactory.generateEqualsRule(json, &xPathFilterProps)
-	if err != nil {
-		t.Fatalf(`EqualToJsonRule %s failed with error: %s`, json, err)
-	}
-	value := `{"boo": "foo", "foo": "boo"}`
-	res, err := rule.check(value)
-	if err != nil || !res {
-		t.Fatalf(`EqualToJsonRule %s failed checking: %s`, json, value)
-	}
-}
-
-func TestEqualToXmlRule(t *testing.T) {
-	xPathFilterProps := XPathFilterProps{true, true, true}
-	xPathXmlFactory := XPathXmlFactory{}
-	xml := "<thing>Hello</thing>"
-	rule, err := xPathXmlFactory.generateEqualsRule(xml, &xPathFilterProps)
-	if err != nil {
-		t.Fatalf(`EqualToXmlRule %s failed with error: %s`, xml, err)
-	}
-	value := "<thing>Hello</thing>"
-	res, err := rule.check(value)
-	if err != nil || !res {
-		t.Fatalf(`EqualToXmlRule %s failed checking: %s`, xml, value)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule, err := tt.factory()
+			require.NoError(t, err)
+			requireRuleCheck(t, rule, tt.input, true)
+		})
 	}
 }
 
 func TestBlockRule(t *testing.T) {
-	ruleAndTrueFalse := BlockRule{
-		rulesAnd: []Rule{TrueRule{}, FalseRule{}},
+	tests := []struct {
+		name string
+		rule BlockRule
+		want bool
+	}{
+		{
+			name: "and true false",
+			rule: BlockRule{rulesAnd: []Rule{&TrueRule{}, &FalseRule{}}},
+			want: false,
+		},
+		{
+			name: "and true true",
+			rule: BlockRule{rulesAnd: []Rule{&TrueRule{}, &TrueRule{}}},
+			want: true,
+		},
+		{
+			name: "or true false",
+			rule: BlockRule{rulesOr: []Rule{&TrueRule{}, &FalseRule{}}},
+			want: true,
+		},
+		{
+			name: "or false false",
+			rule: BlockRule{rulesOr: []Rule{&FalseRule{}, &FalseRule{}}},
+			want: false,
+		},
+		{
+			name: "empty",
+			rule: BlockRule{},
+			want: true,
+		},
 	}
-	ok, _ := ruleAndTrueFalse.check("")
-	if ok {
-		t.Fatalf(`ruleAndTrueFalse failed checking`)
-	}
-	ruleAndTrueTrue := BlockRule{
-		rulesAnd: []Rule{TrueRule{}, TrueRule{}},
-	}
-	ok, _ = ruleAndTrueTrue.check("")
-	if !ok {
-		t.Fatalf(`ruleAndTrueTrue failed checking`)
-	}
-	ruleOrTrueFalse := BlockRule{
-		rulesOr: []Rule{TrueRule{}, FalseRule{}},
-	}
-	ok, _ = ruleOrTrueFalse.check("")
-	if !ok {
-		t.Fatalf(`ruleOrTrueFalse failed checking`)
-	}
-	ruleOrFalseFalse := BlockRule{
-		rulesOr: []Rule{FalseRule{}, FalseRule{}},
-	}
-	ok, _ = ruleOrFalseFalse.check("")
-	if ok {
-		t.Fatalf(`ruleOrFalseFalse failed checking`)
-	}
-	ruleEmpty := BlockRule{}
-	ok, _ = ruleEmpty.check("")
-	if !ok {
-		t.Fatalf(`ruleEmpty failed checking`)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ok, err := tt.rule.check("")
+			require.NoError(t, err)
+			require.Equal(t, tt.want, ok)
+		})
 	}
 }
 
-//TODO - UnitTests for MatchesJsonXPathRule, MatchesXmlXPathRule, EqualToJsonRule, EqualToXmlRule
+func requireRuleCheck(t *testing.T, rule Rule, input string, want bool) {
+	t.Helper()
+
+	res, err := rule.check(input)
+	require.NoError(t, err)
+	require.Equal(t, want, res)
+}

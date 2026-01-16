@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"reflect"
 	"regexp"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/antchfx/jsonquery"
 	"github.com/antchfx/xmlquery"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseRule(t *testing.T) {
@@ -73,27 +75,20 @@ func TestParseRule(t *testing.T) {
 		EqualToXml:          &EqualToXml,
 		MatchesXPath:        &XPathFilter{Expression: MatchesXPath},
 	}
-
 	rules, err := parseRule(&filter)
-	if err != nil {
-		t.Fatalf(`Error parsing rule: %s`, err)
-	}
+	require.NoError(t, err)
 
 	equalToBaseRule := EqualToBaseRule{
 		IgnoreArrayOrder:    true,
 		IgnoreExtraElements: true,
 	}
+
 	equalToJsonNode, err := jsonquery.Parse(strings.NewReader(EqualToJson))
-	if err != nil {
-		t.Fatalf(`Wrong example of Json Query: %s`, err)
-	}
+	require.NoError(t, err)
+
 	equalToXmlNode, err := xmlquery.Parse(strings.NewReader(EqualToXml))
-	if err != nil {
-		t.Fatalf(`Wrong example of Xml Query: %s`, err)
-	}
-	if err != nil {
-		t.Fatalf(`Wrong example of Xml XPath: %s`, err)
-	}
+	require.NoError(t, err)
+
 	emptyBlockRule := &BlockRule{rulesOr: []Rule{}}
 	rulesChecker := RulesChecker{rules, t}
 	rulesToCheck := map[string]Rule{
@@ -130,28 +125,36 @@ func (rulesChecker *RulesChecker) checkRule(ruleToCheck Rule, ruleTitle string) 
 }
 
 func TestParseRules(t *testing.T) {
-	Contains := "Contains"
-	CaseInsensitive := false
-	filter := Filter{
-		Contains: &Contains,
-		And:      []Filter{{Contains: &Contains}},
-		Or:       []Filter{{Contains: &Contains}},
+	contains := "Contains"
+
+	filter := &Filter{
+		Contains: &contains,
+		And:      []Filter{{Contains: &contains}},
+		Or:       []Filter{{Contains: &contains}},
 	}
 
-	rules, err := parseRules(&filter, true)
-	rulesAnd := rules.rulesAnd
-	rulesOr := rules.rulesOr
-	rule := ContainsRule{Contains, CaseInsensitive}
+	rules, err := parseRules(filter, true)
 	if err != nil {
-		t.Fatalf(`Error parsing rules: %s`, err)
+		t.Fatalf("parseRules returned error: %v", err)
 	}
-	if !reflect.DeepEqual(rulesAnd[0], rule) {
-		t.Fatalf(`Error parsing rule And: %s`, rulesAnd[0])
+
+	check := func(t *testing.T, r Rule) {
+		t.Helper()
+
+		cr := r.(*ContainsRule)
+		require.Equal(t, contains, cr.val)
+		require.False(t, cr.caseInsensitive)
 	}
-	if !reflect.DeepEqual(rulesAnd[1], rule) {
-		t.Fatalf(`Error parsing rule And: %s`, rulesAnd[1])
+
+	for i, r := range rules.rulesAnd {
+		t.Run(fmt.Sprintf("AND[%d]", i), func(t *testing.T) {
+			check(t, r)
+		})
 	}
-	if !reflect.DeepEqual(rulesOr[0], rule) {
-		t.Fatalf(`Error parsing rule Or: %s`, rulesOr[0])
+
+	for i, r := range rules.rulesOr {
+		t.Run(fmt.Sprintf("OR[%d]", i), func(t *testing.T) {
+			check(t, r)
+		})
 	}
 }

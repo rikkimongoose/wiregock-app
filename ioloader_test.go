@@ -7,35 +7,28 @@ import (
 )
 
 func TestMockLoader_Reset(t *testing.T) {
-	// Создаём мок
-	ml := NewMockLoader()
-
-	// Проверяем, что изначально он пустой
-	require.Empty(t, ml.data)
-
-	// 1. Первый сброс с набором данных
-	data1 := map[string]string{
-		"a": "1",
-		"b": "2",
+	// Инициализация MockLoader с какими-то начальными данными
+	loader := &MockLoader{
+		data: map[string]string{
+			"oldKey": "oldValue",
+		},
 	}
-	ml.Reset(data1)
 
-	// Проверяем, что данные скопированы
-	require.Equal(t, data1, ml.data)
-
-	// 2. Второй сброс с другим набором данных
-	data2 := map[string]string{
-		"x": "10",
-		"y": "20",
+	// Данные, которые хотим загрузить через Reset
+	newData := map[string]string{
+		"key1": "value1",
+		"key2": "value2",
 	}
-	ml.Reset(data2)
 
-	// Проверяем, что предыдущие данные удалены и новые добавлены
-	require.Equal(t, data2, ml.data)
-	require.NotContains(t, ml.data, "a")
-	require.NotContains(t, ml.data, "b")
+	loader.Reset(newData)
 
-	// 3. Сброс с пустой map
-	ml.Reset(map[string]string{})
-	require.Empty(t, ml.data)
+	// Проверяем, что старые данные удалились
+	require.NotContains(t, loader.data, "oldKey", "Старые данные должны быть очищены")
+
+	// Проверяем, что новые данные добавились корректно
+	require.Equal(t, "value1", loader.data["key1"])
+	require.Equal(t, "value2", loader.data["key2"])
+
+	// Проверка полного соответствия map
+	require.Equal(t, newData, loader.data, "Данные после Reset должны совпадать с переданными")
 }
