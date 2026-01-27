@@ -72,8 +72,21 @@ func TestGenerateHandler(t *testing.T) {
 			url:        "/foo",
 			wantStatus: http.StatusOK,
 			wantBody:   "Hello, world!",
-		},
-		{
+		}, {
+			name: "Successful GET request to /foo in url",
+			mock: mock(t, `
+								{
+								    "request": { "url": "/foo" },
+								    "response": {
+								        "body": "Hello, world!"
+								    }
+								}`),
+			method:     http.MethodGet,
+			body:       "",
+			url:        "/foo",
+			wantStatus: http.StatusOK,
+			wantBody:   "Hello, world!",
+		}, {
 			name: "Successful POST request",
 			mock: mock(t, `
 					{

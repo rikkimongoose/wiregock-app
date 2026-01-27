@@ -177,11 +177,9 @@ func (mocksHandler *MocksHandler) InstallMock(mock *MockData) (string, http.Hand
 		handler = mocksHandler.basicAuth(BasicAuthConfig{handler, *mock.Request.BasicAuthCredentials.Username, *mock.Request.BasicAuthCredentials.Password})
 	}
 	var url string
-	if mock.Request.UrlPath != nil {
-		url = *mock.Request.UrlPath
-	} else if mock.Request.UrlPattern != nil {
-		url = *mock.Request.UrlPattern
-	} else {
+
+	url, ok := mock.Request.GetURL()
+	if !ok {
 		mocksHandler.log.Warn(`No url defined for mock. Default url is used`)
 		url = "/"
 	}

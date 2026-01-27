@@ -119,10 +119,9 @@ func (loader *MongoMocksLoader) convertToMockRoute(mongoMockRoute MongoMockRoute
 			loader.log.Error(`Unable to parse MockData`, zap.Error(err))
 			continue
 		}
-		if mock.Request.UrlPath != nil {
-			loader.log.Info(`Rule loaded`, zap.String("url", *mock.Request.UrlPath))
-		} else if mock.Request.UrlPattern != nil {
-			loader.log.Info(`Rule loaded`, zap.String("url regex", *mock.Request.UrlPattern))
+		url, ok := mock.Request.GetURL()
+		if ok {
+			loader.log.Info(`Rule loaded`, zap.String("url", url))
 		} else {
 			loader.log.Info(`Rule loaded, but no URL to attach`)
 		}

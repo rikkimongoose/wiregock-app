@@ -149,7 +149,13 @@ func (loader *FileMocksLoader) Load() []MockRoute {
 		}
 		mockRoutes = append(mockRoutes, MockRoute{mocks})
 		for _, mock := range mocks {
-			loader.log.Info(`Successfully load route from file`, zap.String("urlPath", *mock.Request.UrlPath), zap.String("file", file))
+			url, ok := mock.Request.GetURL()
+			if !ok {
+				// ни url, ни urlPath не пришли
+				loader.log.Info(`No file path defined`)
+				continue
+			}
+			loader.log.Info(`Successfully load route from file`, zap.String("urlPath", url), zap.String("file", file))
 		}
 	}
 	return mockRoutes

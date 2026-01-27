@@ -62,6 +62,7 @@ type BasicAuthCredentials struct {
 }
 
 type MockRequest struct {
+	Url                  *string                 `json:"url,omitempty" bson:"url,omitempty"`
 	UrlPath              *string                 `json:"urlPath,omitempty" bson:"urlPath,omitempty"`
 	UrlPattern           *string                 `json:"urlPattern,omitempty" bson:"urlPattern,omitempty"`
 	Method               *string                 `json:"method,omitempty" bson:"method,omitempty"`
@@ -72,6 +73,19 @@ type MockRequest struct {
 	BodyPatterns         []Filter                `json:"bodyPatterns,omitempty" bson:"bodyPatterns,omitempty"`
 	MultipartPatterns    []MultipartPatternsData `json:"multipartPatterns,omitempty" bson:"multipartPatterns,omitempty"`
 	BasicAuthCredentials *BasicAuthCredentials   `json:"basicAuthCredentials,omitempty" bson:"basicAuthCredentials,omitempty"`
+}
+
+func (r *MockRequest) GetURL() (string, bool) {
+	if r.Url != nil {
+		return *r.Url, true
+	}
+	if r.UrlPath != nil {
+		return *r.UrlPath, true
+	}
+	if r.UrlPattern != nil {
+		return *r.UrlPattern, true
+	}
+	return "", false
 }
 
 type MockResponse struct {
